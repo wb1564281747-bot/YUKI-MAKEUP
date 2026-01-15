@@ -53,6 +53,15 @@
       font-size: 13px;
     }
 
+    <script>
+document.addEventListener("show.bs.modal", () => {
+  document.querySelector(".bottom-nav").style.display = "none";
+});
+document.addEventListener("hidden.bs.modal", () => {
+  document.querySelector(".bottom-nav").style.display = "";
+});
+</script>
+
     @media (max-width: 576px) {
       .modal-dialog { margin: 0; max-width: 100%; height: 100%; }
       .modal-content { height: 100%; border-radius: 0 !important; }
@@ -1253,4 +1262,5 @@
 </script>
 </body>
 </html>
+
 
