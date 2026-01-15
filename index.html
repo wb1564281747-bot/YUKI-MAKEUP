@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-
-  <title>化妆店预约 & 账单系统</title>
+  <title>化妆店预约 & 账单系统（云同步终版）</title>
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -14,8 +13,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="化妆店系统">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-
-  <!-- iOS icons (你先用占位，后面我教你怎么换成你店的logo) -->
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
   <link rel="icon" href="icons/icon-192.png">
 
@@ -38,41 +35,27 @@
     .fc .fc-button { padding: .25rem .4rem; font-size: 12px; }
     .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number { font-size: 12px; }
 
+    /* ✅ 修复 iPhone 点击不到保存：不要让底部导航压住 modal */
     .bottom-nav {
       position: fixed; left: 0; right: 0; bottom: 0;
       background: #fff;
       border-top: 1px solid #e9ecef;
       padding: 8px 10px;
-      z-index: 1020;
-      padding-bottom: calc(8px + env(safe-area-inset-bottom)); /* iPhone 安全区 */
+      z-index: 1020; /* 低于 bootstrap modal */
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
     }
-    .bottom-nav .btn {
-      flex: 1;
-      border-radius: 14px;
-      padding: 10px 0;
-      font-size: 13px;
-    }
-
-    <script>
-document.addEventListener("show.bs.modal", () => {
-  document.querySelector(".bottom-nav").style.display = "none";
-});
-document.addEventListener("hidden.bs.modal", () => {
-  document.querySelector(".bottom-nav").style.display = "";
-});
-</script>
+    .bottom-nav .btn { flex: 1; border-radius: 14px; padding: 10px 0; font-size: 13px; }
 
     @media (max-width: 576px) {
       .modal-dialog { margin: 0; max-width: 100%; height: 100%; }
       .modal-content { height: 100%; border-radius: 0 !important; }
-      .modal-body { overflow-y: auto; }
+      .modal-body { overflow-y: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
       .container { padding-left: 12px; padding-right: 12px; }
     }
 
     .svc-item { border:1px solid #e9ecef; border-radius:14px; padding:10px; background:#fff; }
     .section-title { font-weight: 600; }
 
-    /* iOS：给“添加到主屏幕”提示条（只有 Safari 且未安装时显示） */
     .ios-install-tip {
       position: sticky;
       top: 56px;
@@ -90,12 +73,11 @@ document.addEventListener("hidden.bs.modal", () => {
 <body>
 <nav class="navbar bg-white border-bottom sticky-top">
   <div class="container d-flex justify-content-between align-items-center">
-    <span class="navbar-brand mb-0 fw-semibold">💄 化妆店系统</span>
-    <div class="d-flex gap-2">
-      <button class="btn btn-outline-secondary btn-sm" id="btnExport">导出</button>
-      <button class="btn btn-outline-secondary btn-sm" id="btnImport">导入</button>
-      <input type="file" id="importFile" accept="application/json" hidden />
-      <button class="btn btn-outline-danger btn-sm" id="btnReset">清空</button>
+    <span class="navbar-brand mb-0 fw-semibold">💄 化妆店系统（云同步）</span>
+    <div class="d-flex gap-2 align-items-center">
+      <button class="btn btn-outline-primary btn-sm" id="btnSync">同步刷新</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnShopInfo">店铺</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnLogout">退出</button>
     </div>
   </div>
 </nav>
@@ -106,189 +88,257 @@ document.addEventListener("hidden.bs.modal", () => {
     <div class="small-muted">Safari 点【分享】→【添加到主屏幕】，以后像 App 一样全屏打开。</div>
   </div>
 
+  <!-- Auth / Shop Gate -->
+  <div id="gate" class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="section-title">🔐 登录 / 加入店铺</div>
+      <div class="small-muted mb-2">多设备同步需要登录。老板创建店铺，员工用店铺码加入。</div>
+
+      <div class="row g-2">
+        <div class="col-12">
+          <label class="form-label required">邮箱</label>
+          <input class="form-control" id="authEmail" placeholder="例如：boss@example.com" />
+        </div>
+        <div class="col-12">
+          <label class="form-label required">密码</label>
+          <input class="form-control" id="authPwd" type="password" placeholder="设置一个密码（员工可各自注册）" />
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-primary flex-grow-1" id="btnSignIn">登录</button>
+        <button class="btn btn-outline-primary flex-grow-1" id="btnSignUp">注册</button>
+      </div>
+
+      <hr class="my-3"/>
+
+      <div class="row g-2">
+        <div class="col-12">
+          <label class="form-label">店铺名称（老板创建时用）</label>
+          <input class="form-control" id="shopName" placeholder="例如：YUKI 美妆" />
+        </div>
+        <div class="col-12">
+          <button class="btn btn-success w-100" id="btnCreateShop">我是老板：创建店铺</button>
+        </div>
+        <div class="col-12">
+          <label class="form-label">店铺码（员工加入）</label>
+          <input class="form-control mono" id="joinCode" placeholder="老板给你的 join_code" />
+        </div>
+        <div class="col-12">
+          <button class="btn btn-outline-success w-100" id="btnJoinShop">我是员工：输入店铺码加入</button>
+        </div>
+      </div>
+
+      <div class="alert alert-danger d-none mt-3" id="gateErr"></div>
+      <div class="alert alert-success d-none mt-3" id="gateOk"></div>
+    </div>
+  </div>
+
   <!-- Pages -->
-  <div id="pageCalendar" class="page">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="section-title">📅 预约</div>
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm" id="btnNewBooking">新增预约</button>
-        <button class="btn btn-outline-primary btn-sm" id="btnNewInvoiceFromCal">做账单</button>
-      </div>
-    </div>
-
-    <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div class="small-muted">手机上推荐：周/日/列表</div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary btn-sm" id="btnViewWeek">周</button>
-            <button class="btn btn-outline-secondary btn-sm" id="btnViewDay">日</button>
-            <button class="btn btn-outline-secondary btn-sm" id="btnViewList">列表</button>
-          </div>
-        </div>
-        <div id="calendarWrap" class="mt-2">
-          <div id="calendar"></div>
+  <div id="app" class="d-none">
+    <div id="pageCalendar" class="page">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="section-title">📅 预约</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary btn-sm" id="btnNewBooking">新增预约</button>
+          <button class="btn btn-outline-primary btn-sm" id="btnNewInvoiceFromCal">做账单</button>
         </div>
       </div>
-    </div>
 
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="section-title">近期预约</div>
-        <div class="small-muted mb-2" id="todayHint"></div>
-        <div id="upcomingList" class="vstack gap-2"></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="pageStaff" class="page d-none">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="section-title">👩‍🎨 化妆师</div>
-      <div class="small-muted" id="staffCount"></div>
-    </div>
-
-    <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <div class="section-title mb-2">新增/编辑化妆师</div>
-        <input type="hidden" id="staffId" />
-
-        <div class="mb-2">
-          <label class="form-label required">姓名</label>
-          <input class="form-control" id="staffName" placeholder="例如：小王" />
-        </div>
-
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label required">提成方式</label>
-            <select class="form-select" id="commissionType">
-              <option value="percent">按比例（%）</option>
-              <option value="fixed">固定金额（元/单）</option>
-            </select>
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="small-muted">手机推荐：周/日/列表</div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="btnViewWeek">周</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnViewDay">日</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnViewList">列表</button>
+            </div>
           </div>
-          <div class="col-6">
-            <label class="form-label required">提成数值</label>
-            <input class="form-control" id="commissionValue" type="number" min="0" step="0.01" placeholder="40 或 800" />
-          </div>
-        </div>
-
-        <div class="d-flex gap-2 mt-3">
-          <button class="btn btn-primary flex-grow-1" id="btnSaveStaff">保存</button>
-          <button class="btn btn-outline-secondary" id="btnClearStaff">清空</button>
-        </div>
-
-        <hr class="my-3"/>
-
-        <div class="section-title mb-2">该化妆师的项目/金额</div>
-        <div class="small-muted mb-2">先选择/保存化妆师，再添加该员工可选项目。</div>
-
-        <div class="row g-2">
-          <div class="col-7">
-            <input class="form-control" id="svcName" placeholder="项目名称：新娘跟妆..." />
-          </div>
-          <div class="col-5">
-            <input class="form-control" id="svcPrice" type="number" min="0" step="0.01" placeholder="金额" />
-          </div>
-        </div>
-        <div class="d-flex gap-2 mt-2">
-          <button class="btn btn-outline-primary flex-grow-1" id="btnAddService">添加项目</button>
-          <button class="btn btn-outline-secondary" id="btnClearServiceInput">清空</button>
-        </div>
-
-        <div class="vstack gap-2 mt-3" id="serviceList"></div>
-      </div>
-    </div>
-
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="section-title mb-2">化妆师列表</div>
-        <div id="staffCards" class="vstack gap-2"></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="pageInvoices" class="page d-none">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="section-title">🧾 账单</div>
-      <button class="btn btn-primary btn-sm" id="btnNewInvoice">新增账单</button>
-    </div>
-
-    <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <input class="form-control" id="invoiceSearch" placeholder="搜索：客户/项目/员工/备注/状态" />
-        <div class="small-muted mt-2">账单支持状态与历史记录，作废不计入报表。</div>
-      </div>
-    </div>
-
-    <div id="invoiceCards" class="vstack gap-2"></div>
-  </div>
-
-  <div id="pageReports" class="page d-none">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="section-title">📊 报表</div>
-      <button class="btn btn-primary btn-sm" id="btnRunReport">生成</button>
-    </div>
-
-    <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label">开始</label>
-            <input type="date" class="form-control" id="repStart">
-          </div>
-          <div class="col-6">
-            <label class="form-label">结束</label>
-            <input type="date" class="form-control" id="repEnd">
+          <div id="calendarWrap" class="mt-2">
+            <div id="calendar"></div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="row g-2">
-      <div class="col-12">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <div class="small-muted">营业额（应收，排除作废）</div>
-            <div class="fs-3 fw-semibold mono" id="repTotal">0.00</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <div class="small-muted">实收</div>
-            <div class="fs-5 fw-semibold mono" id="repPaid">0.00</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <div class="small-muted">未收</div>
-            <div class="fs-5 fw-semibold mono" id="repUnpaid">0.00</div>
-          </div>
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="section-title">近期预约</div>
+          <div class="small-muted mb-2" id="todayHint"></div>
+          <div id="upcomingList" class="vstack gap-2"></div>
         </div>
       </div>
     </div>
 
-    <div class="card shadow-sm mt-3">
-      <div class="card-body">
-        <div class="section-title">按化妆师统计</div>
-        <div id="repStaffCards" class="vstack gap-2 mt-2"></div>
+    <div id="pageStaff" class="page d-none">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="section-title">👩‍🎨 化妆师</div>
+        <div class="small-muted" id="staffCount"></div>
+      </div>
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <div class="section-title mb-2">新增/编辑化妆师</div>
+          <input type="hidden" id="staffId" />
+
+          <div class="mb-2">
+            <label class="form-label required">姓名</label>
+            <input class="form-control" id="staffName" placeholder="例如：小王" />
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label required">提成方式</label>
+              <select class="form-select" id="commissionType">
+                <option value="percent">按比例（%）</option>
+                <option value="fixed">固定金额（元/单）</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label required">提成数值</label>
+              <input class="form-control" id="commissionValue" type="number" min="0" step="0.01" placeholder="40 或 800" />
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary flex-grow-1" id="btnSaveStaff">保存</button>
+            <button class="btn btn-outline-secondary" id="btnClearStaff">清空</button>
+          </div>
+
+          <hr class="my-3"/>
+
+          <div class="section-title mb-2">该化妆师的项目/金额</div>
+          <div class="small-muted mb-2">每个化妆师可有不同项目，不同金额。</div>
+
+          <div class="row g-2">
+            <div class="col-7">
+              <input class="form-control" id="svcName" placeholder="项目名称：新娘跟妆..." />
+            </div>
+            <div class="col-5">
+              <input class="form-control" id="svcPrice" type="number" min="0" step="0.01" placeholder="金额" />
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-outline-primary flex-grow-1" id="btnAddService">添加项目</button>
+            <button class="btn btn-outline-secondary" id="btnClearServiceInput">清空</button>
+          </div>
+
+          <div class="vstack gap-2 mt-3" id="serviceList"></div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="section-title mb-2">化妆师列表</div>
+          <div id="staffCards" class="vstack gap-2"></div>
+        </div>
       </div>
     </div>
 
-    <div class="card shadow-sm mt-3">
-      <div class="card-body">
-        <div class="section-title">未结清账单</div>
-        <div class="small-muted">方便追尾款（不含作废）</div>
-        <div id="repOpenInvoices" class="vstack gap-2 mt-2"></div>
+    <div id="pageInvoices" class="page d-none">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="section-title">🧾 账单</div>
+        <button class="btn btn-primary btn-sm" id="btnNewInvoice">新增账单</button>
+      </div>
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <input class="form-control" id="invoiceSearch" placeholder="搜索：客户/项目/员工/备注/状态" />
+          <div class="small-muted mt-2">
+            云同步：每次保存即写入云端；其他设备点“同步刷新”即可看到最新数据。
+          </div>
+        </div>
+      </div>
+
+      <div id="invoiceCards" class="vstack gap-2"></div>
+    </div>
+
+    <div id="pageReports" class="page d-none">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="section-title">📊 报表</div>
+        <button class="btn btn-primary btn-sm" id="btnRunReport">生成</button>
+      </div>
+
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">开始</label>
+              <input type="date" class="form-control" id="repStart">
+            </div>
+            <div class="col-6">
+              <label class="form-label">结束</label>
+              <input type="date" class="form-control" id="repEnd">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-2">
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="small-muted">营业额（应收，排除作废）</div>
+              <div class="fs-3 fw-semibold mono" id="repTotal">0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="small-muted">实收</div>
+              <div class="fs-5 fw-semibold mono" id="repPaid">0.00</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="small-muted">未收</div>
+              <div class="fs-5 fw-semibold mono" id="repUnpaid">0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="small-muted">已收定金</div>
+              <div class="fs-5 fw-semibold mono" id="repDepositPaid">0.00</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="small-muted">未收尾款</div>
+              <div class="fs-5 fw-semibold mono" id="repBalanceUnpaid">0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mt-3">
+        <div class="card-body">
+          <div class="section-title">按化妆师统计</div>
+          <div id="repStaffCards" class="vstack gap-2 mt-2"></div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mt-3">
+        <div class="card-body">
+          <div class="section-title">未结清账单</div>
+          <div class="small-muted">方便追尾款（不含作废）</div>
+          <div id="repOpenInvoices" class="vstack gap-2 mt-2"></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Bottom nav -->
-<div class="bottom-nav">
+<div class="bottom-nav d-none" id="bottomNav">
   <div class="container d-flex gap-2">
     <button class="btn btn-outline-primary" data-page="Calendar">预约</button>
     <button class="btn btn-outline-primary" data-page="Staff">化妆师</button>
@@ -305,6 +355,7 @@ document.addEventListener("hidden.bs.modal", () => {
         <h5 class="modal-title">预约单</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
+
       <div class="modal-body">
         <input type="hidden" id="bookingId">
 
@@ -377,7 +428,7 @@ document.addEventListener("hidden.bs.modal", () => {
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content" style="border-radius: 16px;">
       <div class="modal-header">
-        <h5 class="modal-title">账单</h5>
+        <h5 class="modal-title">账单（定金/尾款）</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
@@ -392,16 +443,20 @@ document.addEventListener("hidden.bs.modal", () => {
 
         <div class="row g-2">
           <div class="col-6">
-            <label class="form-label required">应收金额</label>
+            <label class="form-label required">应收总额</label>
             <input class="form-control" id="amountTotal" type="number" min="0" step="0.01" />
           </div>
           <div class="col-6">
-            <label class="form-label">已收金额</label>
-            <input class="form-control" id="amountPaid" type="number" min="0" step="0.01" />
+            <label class="form-label required">定金（可改）</label>
+            <input class="form-control" id="depositDue" type="number" min="0" step="0.01" />
           </div>
         </div>
 
         <div class="row g-2 mt-2">
+          <div class="col-6">
+            <label class="form-label">已收合计</label>
+            <input class="form-control" id="amountPaid" type="number" min="0" step="0.01" />
+          </div>
           <div class="col-6">
             <label class="form-label">收款方式</label>
             <select class="form-select" id="payMethod">
@@ -412,15 +467,26 @@ document.addEventListener("hidden.bs.modal", () => {
               <option value="其他">其他</option>
             </select>
           </div>
+        </div>
+
+        <div class="row g-2 mt-2">
           <div class="col-6">
             <label class="form-label">账单状态</label>
             <select class="form-select" id="invoiceStatus">
-              <option value="UNPAID">未收</option>
-              <option value="PARTIAL">部分收</option>
-              <option value="PAID">已结清</option>
+              <option value="AUTO">自动（推荐）</option>
               <option value="VOID">作废</option>
             </select>
+            <div class="small-muted mt-1" id="statusHint"></div>
           </div>
+          <div class="col-6">
+            <label class="form-label">尾款（自动）</label>
+            <input class="form-control" id="balanceDue" type="number" disabled />
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-outline-primary flex-grow-1" id="btnQuickDeposit">快捷：收定金</button>
+          <button class="btn btn-outline-success flex-grow-1" id="btnQuickPaidAll">快捷：结清</button>
         </div>
 
         <div class="mt-2">
@@ -442,6 +508,57 @@ document.addEventListener("hidden.bs.modal", () => {
   </div>
 </div>
 
+<!-- Owner Lock Modal (Mode B) -->
+<div class="modal fade" id="lockModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header">
+        <h5 class="modal-title">🔒 老板锁</h5>
+      </div>
+      <div class="modal-body">
+        <div class="small-muted mb-2" id="lockTip">进入账单/报表需要密码</div>
+
+        <div class="mb-2">
+          <label class="form-label required" id="lockLabel">密码（4~6位数字）</label>
+          <input id="lockPin" class="form-control" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="请输入数字密码">
+        </div>
+
+        <div class="alert alert-danger d-none" id="lockErr"></div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-outline-secondary flex-grow-1" id="lockCancel">取消</button>
+          <button class="btn btn-primary flex-grow-1" id="lockOk">确定</button>
+        </div>
+
+        <hr class="my-3"/>
+
+        <button class="btn btn-outline-danger w-100" id="lockReset">忘记密码/重设（需要确认）</button>
+        <div class="small-muted mt-2">密码只保存在本机（iPhone）浏览器里，不会上传。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shop info modal -->
+<div class="modal fade" id="shopModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header">
+        <h5 class="modal-title">🏪 店铺信息</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small-muted">当前店铺</div>
+        <div class="fw-semibold" id="shopTitle">-</div>
+        <div class="small-muted mt-2">店铺码（发给员工加入）</div>
+        <div class="mono fs-5" id="shopCode">-</div>
+        <button class="btn btn-outline-primary w-100 mt-3" id="btnCopyCode">复制店铺码</button>
+        <div class="small-muted mt-2">员工加入：登录后输入此码 → 加入店铺。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080">
   <div id="toast" class="toast align-items-center text-bg-dark border-0" role="alert">
@@ -454,813 +571,1494 @@ document.addEventListener("hidden.bs.modal", () => {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-  /********************
-   * iPhone PWA 提示 & 离线 SW
-   ********************/
-  (function () {
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isInStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
-    const isSafari = isIOS && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
+/********************
+ * Supabase Config (你的)
+ ********************/
+const SUPABASE_URL = "https://pqnrhzmhnajezkivpfks.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxbnJoem1obm5hamV6a2l2cGZrcyIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY4NDM5MzI1LCJleHAiOjIwODQwMTUzMjV9.NqnjHHhAxZIloSRdBPIApNZi4e_lVb57MUSXBxxmbWc";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const tip = document.getElementById("iosTip");
-    if (isSafari && !isInStandalone) tip.style.display = "block";
-
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
-  })();
+/********************
+ * iPhone install tip + SW
+ ********************/
+(function () {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isInStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  const isSafari = isIOS && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
+  const tip = document.getElementById("iosTip");
+  if (isSafari && !isInStandalone) tip.style.display = "block";
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(()=>{});
+})();
 </script>
 
 <script>
-  /********************
-   * App Core (和你手机适配版一致)
-   ********************/
-  const STORE_KEY = "makeup_shop_iphone_pwa_v1";
-  function uid(prefix="id"){ return prefix+"_"+Math.random().toString(16).slice(2)+"_"+Date.now().toString(16); }
+/********************
+ * In-Memory DB (cloud-backed)
+ ********************/
+const DEFAULT_DEPOSIT = 500;
+let DB = { staff: [], bookings: [], invoices: [] };
 
-  function migrateDB(db){
-    db.staff = Array.isArray(db.staff) ? db.staff : [];
-    db.bookings = Array.isArray(db.bookings) ? db.bookings : [];
-    db.invoices = Array.isArray(db.invoices) ? db.invoices : [];
-    db.staff = db.staff.map(s => ({...s, services: Array.isArray(s.services) ? s.services : []}));
-    db.bookings = db.bookings.map(b => ({...b, servicePrice: typeof b.servicePrice==="number" ? b.servicePrice : Number(b.servicePrice||0)}));
-    db.invoices = db.invoices.map(inv => {
-      const out = {...inv};
-      if(!out.status){
-        const total = Number(out.amountTotal||0), paid = Number(out.amountPaid||0);
-        out.status = paid<=0.00001 ? "UNPAID" : (paid+0.00001<total ? "PARTIAL" : "PAID");
-      }
-      if(!Array.isArray(out.history)) out.history = [];
-      return out;
-    });
-    return db;
+let currentUser = null;
+let currentShop = null; // {id, name, join_code, owner_id}
+
+const fmtMoney = (n) => (Number(n || 0)).toFixed(2);
+const fmtDateTime = (iso) => new Date(iso).toLocaleString("zh-CN", { hour12:false });
+function showToast(msg) {
+  document.getElementById("toastText").textContent = msg;
+  new bootstrap.Toast(document.getElementById("toast"), { delay: 1600 }).show();
+}
+function uuid() { return (crypto?.randomUUID ? crypto.randomUUID() : ("id_"+Math.random().toString(16).slice(2)+"_"+Date.now())); }
+
+function staffById(id) { return DB.staff.find(s => s.id === id); }
+function bookingById(id) { return DB.bookings.find(b => b.id === id); }
+function invoiceById(id) { return DB.invoices.find(i => i.id === id); }
+
+function dateToISO(dateStr, timeStr) { return new Date(dateStr + "T" + timeStr + ":00").toISOString(); }
+function overlap(aStart, aEnd, bStart, bEnd) { return (aStart < bEnd) && (bStart < aEnd); }
+
+function calcCommission(staff, amountBase) {
+  if (!staff) return 0;
+  const base = Number(amountBase || 0);
+  if (staff.commission_type === "percent") return base * (Number(staff.commission_value || 0) / 100);
+  return Number(staff.commission_value || 0);
+}
+function autoStatus(total, paid, depositDue) {
+  total = Number(total||0);
+  paid = Number(paid||0);
+  depositDue = Math.max(0, Number(depositDue||0));
+  if (paid <= 0.00001) return "UNPAID";
+  if (paid + 0.00001 < depositDue) return "DEPOSIT";
+  if (paid + 0.00001 < total) return "PARTIAL";
+  return "PAID";
+}
+function statusLabel(st) {
+  if (st === "VOID") return "作废";
+  if (st === "UNPAID") return "未收";
+  if (st === "DEPOSIT") return "已收定金";
+  if (st === "PARTIAL") return "部分收";
+  if (st === "PAID") return "已结清";
+  return st;
+}
+function invoiceBadge(inv) {
+  if (inv.status_final === "VOID") return { text: "作废", cls: "bg-secondary text-white" };
+  const st = inv.status_final || "UNPAID";
+  if (st === "PAID") return { text: "已结清", cls: "bg-success text-white" };
+  if (st === "PARTIAL") return { text: "部分收", cls: "bg-primary text-white" };
+  if (st === "DEPOSIT") return { text: "已收定金", cls: "bg-info text-dark" };
+  return { text: "未收", cls: "bg-warning text-dark" };
+}
+
+/********************
+ * Gate UI
+ ********************/
+function gateMsg(ok, msg) {
+  const e = document.getElementById("gateErr");
+  const s = document.getElementById("gateOk");
+  if (ok) {
+    e.classList.add("d-none");
+    s.classList.remove("d-none");
+    s.textContent = msg;
+  } else {
+    s.classList.add("d-none");
+    e.classList.remove("d-none");
+    e.textContent = msg;
   }
+}
 
-  function saveDB(db){ db.updatedAt = new Date().toISOString(); localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
-  function loadDB(){
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw) return migrateDB(JSON.parse(raw));
-    const db = {
-      staff: [
-        { id: uid("st"), name:"小王", commissionType:"percent", commissionValue:40,
-          services:[{id:uid("svc"),name:"新娘跟妆",price:3000},{id:uid("svc"),name:"生活妆",price:399}] },
-        { id: uid("st"), name:"小李", commissionType:"fixed", commissionValue:800,
-          services:[{id:uid("svc"),name:"舞台妆",price:699},{id:uid("svc"),name:"写真妆",price:499}] }
-      ],
-      bookings: [],
-      invoices: [],
-      updatedAt: new Date().toISOString(),
-      version: 1
-    };
-    saveDB(db); return db;
-  }
-  let DB = loadDB();
+/********************
+ * Shop logic
+ ********************/
+function genJoinCode() {
+  // 8位好读
+  const s = Math.random().toString(36).slice(2, 10).toUpperCase();
+  return s;
+}
 
-  const fmtMoney = (n)=>(Number(n||0)).toFixed(2);
-  const fmtDateTime = (iso)=>new Date(iso).toLocaleString("zh-CN",{hour12:false});
-  function showToast(msg){ document.getElementById("toastText").textContent = msg; new bootstrap.Toast(document.getElementById("toast"),{delay:1600}).show(); }
+async function loadMyShop() {
+  if (!currentUser) return null;
 
-  function staffById(id){ return DB.staff.find(s=>s.id===id); }
-  function bookingById(id){ return DB.bookings.find(b=>b.id===id); }
-  function invoiceById(id){ return DB.invoices.find(i=>i.id===id); }
+  // 1) 我是 owner 的店？
+  let { data: shopOwner, error: e1 } = await sb
+    .from("shops")
+    .select("*")
+    .eq("owner_id", currentUser.id)
+    .maybeSingle();
 
-  function dateToISO(dateStr,timeStr){ return new Date(dateStr+"T"+timeStr+":00").toISOString(); }
-  function overlap(aStart,aEnd,bStart,bEnd){ return (aStart<bEnd)&&(bStart<aEnd); }
+  if (e1) console.warn(e1);
 
-  function calcCommission(staff, amountBase){
-    if(!staff) return 0;
-    const base = Number(amountBase||0);
-    if(staff.commissionType==="percent") return base*(Number(staff.commissionValue||0)/100);
-    return Number(staff.commissionValue||0);
-  }
-  function invoiceBadge(inv){
-    const total = Number(inv.amountTotal||0), paid = Number(inv.amountPaid||0);
-    const unpaid = Math.max(0,total-paid);
-    if(inv.status==="VOID") return {text:"作废",cls:"bg-secondary text-white"};
-    if(unpaid<=0.00001) return {text:"已结清",cls:"bg-success text-white"};
-    if(paid>0.00001) return {text:"部分收",cls:"bg-primary text-white"};
-    return {text:"未收",cls:"bg-warning text-dark"};
-  }
+  if (shopOwner) return shopOwner;
 
-  function showPage(name){
-    ["Calendar","Staff","Invoices","Reports"].forEach(p=>{
-      document.getElementById("page"+p).classList.toggle("d-none", p!==name);
-    });
-    document.querySelectorAll(".bottom-nav .btn").forEach(btn=>{
-      const active = btn.dataset.page===name;
-      btn.classList.toggle("btn-primary",active);
-      btn.classList.toggle("btn-outline-primary",!active);
-    });
-  }
-  document.querySelectorAll(".bottom-nav .btn").forEach(btn=>btn.addEventListener("click",()=>showPage(btn.dataset.page)));
+  // 2) 我加入了哪些店？（取第一家）
+  let { data: mem, error: e2 } = await sb
+    .from("shop_members")
+    .select("shop_id, role, shops:shops(*)")
+    .eq("user_id", currentUser.id);
 
-  let calendar;
-  const bookingModal = new bootstrap.Modal(document.getElementById("bookingModal"));
-  const invoiceModal = new bootstrap.Modal(document.getElementById("invoiceModal"));
+  if (e2) console.warn(e2);
 
-  function bookingToEvent(b){
-    const st = staffById(b.staffId);
-    return { id:b.id, title:`${b.custName}｜${b.serviceName||""}｜${st?st.name:"员工已删"}｜${b.status}`, start:b.startISO, end:b.endISO };
-  }
-  function refreshCalendar(){
-    if(!calendar) return;
-    calendar.removeAllEvents();
-    DB.bookings.forEach(b=>calendar.addEvent(bookingToEvent(b)));
-  }
+  const first = mem?.[0]?.shops || null;
+  return first;
+}
 
-  function fillStaffSelect(selectEl,selectedId=null){
-    selectEl.innerHTML="";
-    DB.staff.forEach(s=>{
-      const opt=document.createElement("option");
-      opt.value=s.id;
-      opt.textContent=`${s.name}（${s.commissionType==="percent"?s.commissionValue+"%":fmtMoney(s.commissionValue)+"元/单"}）`;
-      if(selectedId&&selectedId===s.id) opt.selected=true;
-      selectEl.appendChild(opt);
-    });
-    if(!DB.staff.length){
-      const opt=document.createElement("option");
-      opt.value=""; opt.textContent="请先新增化妆师";
-      selectEl.appendChild(opt);
+async function createShopAsOwner(name) {
+  if (!currentUser) throw new Error("请先登录");
+  if (!name.trim()) throw new Error("店铺名称不能为空");
+
+  // join_code 可能冲突，最多尝试几次
+  for (let i=0;i<5;i++) {
+    const join_code = genJoinCode();
+    const { data, error } = await sb
+      .from("shops")
+      .insert({ owner_id: currentUser.id, name: name.trim(), join_code })
+      .select("*")
+      .single();
+    if (!error) {
+      // owner 也写入 members
+      await sb.from("shop_members").insert({ shop_id: data.id, user_id: currentUser.id, role: "owner" });
+      return data;
     }
   }
-  function fillServiceSelectByStaff(serviceSelectEl, staffId, selectedServiceId=null){
-    serviceSelectEl.innerHTML="";
-    const st=staffById(staffId);
-    const svcs=st?.services||[];
-    if(!svcs.length){
-      const opt=document.createElement("option");
-      opt.value=""; opt.textContent="该化妆师暂无项目（去化妆师页添加）";
-      serviceSelectEl.appendChild(opt); return;
-    }
-    svcs.forEach(svc=>{
-      const opt=document.createElement("option");
-      opt.value=svc.id;
-      opt.textContent=`${svc.name}（${fmtMoney(svc.price)}）`;
-      if(selectedServiceId&&selectedServiceId===svc.id) opt.selected=true;
-      serviceSelectEl.appendChild(opt);
-    });
+  throw new Error("创建失败：请重试");
+}
+
+async function joinShopByCode(code) {
+  if (!currentUser) throw new Error("请先登录");
+  code = (code || "").trim().toUpperCase();
+  if (!code) throw new Error("店铺码不能为空");
+
+  const { data: shop, error } = await sb
+    .from("shops")
+    .select("*")
+    .eq("join_code", code)
+    .single();
+  if (error || !shop) throw new Error("店铺码无效");
+
+  // 插入成员（RLS 已允许 user_id = auth.uid()）
+  const { error: e2 } = await sb
+    .from("shop_members")
+    .insert({ shop_id: shop.id, user_id: currentUser.id, role: "staff" });
+  if (e2 && !String(e2.message||"").includes("duplicate")) {
+    // 已加入会 duplicate key，忽略
+    console.warn(e2);
   }
-  document.getElementById("staffSelect").addEventListener("change",()=>{
-    fillServiceSelectByStaff(document.getElementById("serviceSelect"), document.getElementById("staffSelect").value);
+  return shop;
+}
+
+/********************
+ * Cloud sync: load all
+ ********************/
+async function loadAll() {
+  if (!currentShop) return;
+
+  // staff
+  const { data: staff, error: e1 } = await sb
+    .from("staff")
+    .select("*")
+    .eq("shop_id", currentShop.id)
+    .order("created_at", { ascending: true });
+  if (e1) throw e1;
+
+  // services
+  const { data: svcs, error: e2 } = await sb
+    .from("staff_services")
+    .select("*")
+    .eq("shop_id", currentShop.id)
+    .order("created_at", { ascending: true });
+  if (e2) throw e2;
+
+  // bookings
+  const { data: bookings, error: e3 } = await sb
+    .from("bookings")
+    .select("*")
+    .eq("shop_id", currentShop.id)
+    .order("start_iso", { ascending: true });
+  if (e3) throw e3;
+
+  // invoices
+  const { data: invoices, error: e4 } = await sb
+    .from("invoices")
+    .select("*")
+    .eq("shop_id", currentShop.id)
+    .order("created_at", { ascending: false });
+  if (e4) throw e4;
+
+  // stitch services into staff
+  const staffMap = new Map((staff||[]).map(s => [s.id, { ...s, services: [] }]));
+  (svcs||[]).forEach(svc => {
+    const st = staffMap.get(svc.staff_id);
+    if (st) st.services.push({ id: svc.id, name: svc.name, price: Number(svc.price||0) });
   });
 
-  function openNewBooking(prefill={}){
-    document.getElementById("bookingId").value="";
-    document.getElementById("custName").value=prefill.custName||"";
-    document.getElementById("custPhone").value=prefill.custPhone||"";
-    document.getElementById("bookDate").value=prefill.date||new Date().toISOString().slice(0,10);
-    document.getElementById("startTime").value=prefill.startTime||"09:00";
-    document.getElementById("endTime").value=prefill.endTime||"11:00";
-    fillStaffSelect(document.getElementById("staffSelect"), prefill.staffId||(DB.staff[0]?.id??null));
-    const staffId=document.getElementById("staffSelect").value;
-    fillServiceSelectByStaff(document.getElementById("serviceSelect"), staffId, prefill.serviceId||null);
-    document.getElementById("bookingStatus").value=prefill.status||"已预约";
-    document.getElementById("bookingNote").value=prefill.note||"";
-    document.getElementById("btnDeleteBooking").classList.add("d-none");
-    document.getElementById("conflictAlert").classList.add("d-none");
-    bookingModal.show();
-  }
-  function openEditBooking(id){
-    const b=bookingById(id); if(!b) return;
-    document.getElementById("bookingId").value=b.id;
-    document.getElementById("custName").value=b.custName;
-    document.getElementById("custPhone").value=b.custPhone||"";
-    document.getElementById("bookDate").value=b.date;
-    document.getElementById("startTime").value=b.startTime;
-    document.getElementById("endTime").value=b.endTime;
-    fillStaffSelect(document.getElementById("staffSelect"), b.staffId);
-    fillServiceSelectByStaff(document.getElementById("serviceSelect"), b.staffId, b.serviceId||null);
-    document.getElementById("bookingStatus").value=b.status;
-    document.getElementById("bookingNote").value=b.note||"";
-    document.getElementById("btnDeleteBooking").classList.remove("d-none");
-    document.getElementById("conflictAlert").classList.add("d-none");
-    bookingModal.show();
-  }
+  DB.staff = Array.from(staffMap.values());
+  DB.bookings = (bookings||[]).map(b => ({
+    ...b,
+    servicePrice: Number(b.service_price||0),
+    startISO: b.start_iso,
+    endISO: b.end_iso,
+    custName: b.cust_name,
+    custPhone: b.cust_phone,
+    staffId: b.staff_id,
+    serviceId: b.service_id,
+    serviceName: b.service_name,
+    startTime: b.start_time,
+    endTime: b.end_time,
+    note: b.note,
+    status: b.status,
+    date: b.date
+  }));
+  DB.invoices = (invoices||[]).map(inv => ({
+    ...inv,
+    bookingId: inv.booking_id,
+    amountTotal: Number(inv.amount_total||0),
+    depositDue: Number(inv.deposit_due||DEFAULT_DEPOSIT),
+    amountPaid: Number(inv.amount_paid||0),
+    payMethod: inv.pay_method,
+    statusManual: inv.status_manual,
+    statusFinal: inv.status_final,
+    note: inv.note,
+    history: Array.isArray(inv.history) ? inv.history : (inv.history || [])
+  }));
 
-  function validateBooking(payload){
-    const errs=[];
-    if(!payload.custName.trim()) errs.push("客户姓名必填");
-    if(!payload.staffId) errs.push("化妆师必选");
-    if(!payload.serviceId) errs.push("项目必选");
-    if(!payload.date||!payload.startTime||!payload.endTime) errs.push("日期/时间必填");
-    const a=dateToISO(payload.date,payload.startTime);
-    const b=dateToISO(payload.date,payload.endTime);
-    if(a>=b) errs.push("结束时间必须晚于开始时间");
-    const conflict=DB.bookings.some(x=>{
-      if(payload.id&&x.id===payload.id) return false;
-      if(x.staffId!==payload.staffId) return false;
-      if(x.status==="已取消") return false;
-      return overlap(a,b,x.startISO,x.endISO);
-    });
-    return {errs,conflict,startISO:a,endISO:b};
-  }
+  refreshAll();
+}
 
-  document.getElementById("btnSaveBooking").addEventListener("click",()=>{
-    const id=document.getElementById("bookingId").value||null;
-    const payload={
+/********************
+ * CRUD: Staff & Services
+ ********************/
+async function upsertStaff(st) {
+  const payload = {
+    id: st.id || uuid(),
+    shop_id: currentShop.id,
+    name: st.name,
+    commission_type: st.commissionType,
+    commission_value: st.commissionValue,
+    updated_at: new Date().toISOString()
+  };
+  if (!st.id) payload.created_at = new Date().toISOString();
+
+  const { error } = await sb.from("staff").upsert(payload);
+  if (error) throw error;
+
+  // services：这里采用“简单策略”：只改动新增/删除/编辑时分别 upsert/delete（下面单独函数）
+  return payload.id;
+}
+
+async function deleteStaffCloud(staffId) {
+  // services 级联会删（外键 on delete cascade）
+  const { error } = await sb.from("staff").delete().eq("id", staffId).eq("shop_id", currentShop.id);
+  if (error) throw error;
+}
+
+async function upsertServiceCloud(staffId, svc) {
+  const payload = {
+    id: svc.id || uuid(),
+    shop_id: currentShop.id,
+    staff_id: staffId,
+    name: svc.name,
+    price: svc.price,
+    updated_at: new Date().toISOString()
+  };
+  if (!svc.id) payload.created_at = new Date().toISOString();
+
+  const { error } = await sb.from("staff_services").upsert(payload);
+  if (error) throw error;
+  return payload.id;
+}
+
+async function deleteServiceCloud(serviceId) {
+  const { error } = await sb.from("staff_services").delete().eq("id", serviceId).eq("shop_id", currentShop.id);
+  if (error) throw error;
+}
+
+/********************
+ * CRUD: Booking
+ ********************/
+async function upsertBookingCloud(b) {
+  const payload = {
+    id: b.id || uuid(),
+    shop_id: currentShop.id,
+    cust_name: b.custName,
+    cust_phone: b.custPhone || null,
+    staff_id: b.staffId,
+    service_id: b.serviceId,
+    service_name: b.serviceName,
+    service_price: b.servicePrice,
+    date: b.date,
+    start_time: b.startTime,
+    end_time: b.endTime,
+    start_iso: b.startISO,
+    end_iso: b.endISO,
+    status: b.status,
+    note: b.note || null,
+    updated_at: new Date().toISOString()
+  };
+  if (!b.id) payload.created_at = new Date().toISOString();
+
+  const { error } = await sb.from("bookings").upsert(payload);
+  if (error) throw error;
+  return payload.id;
+}
+
+async function deleteBookingCloud(id) {
+  const { error } = await sb.from("bookings").delete().eq("id", id).eq("shop_id", currentShop.id);
+  if (error) throw error;
+}
+
+/********************
+ * CRUD: Invoice
+ ********************/
+async function upsertInvoiceCloud(inv) {
+  const payload = {
+    id: inv.id || uuid(),
+    shop_id: currentShop.id,
+    booking_id: inv.bookingId || null,
+    amount_total: inv.amountTotal,
+    deposit_due: inv.depositDue,
+    amount_paid: inv.amountPaid,
+    pay_method: inv.payMethod || null,
+    note: inv.note || null,
+    status_manual: inv.statusManual || "AUTO",
+    status_final: inv.statusFinal || "UNPAID",
+    history: inv.history || [],
+    updated_at: new Date().toISOString()
+  };
+  if (!inv.id) payload.created_at = new Date().toISOString();
+
+  const { error } = await sb.from("invoices").upsert(payload);
+  if (error) throw error;
+  return payload.id;
+}
+
+async function deleteInvoiceCloud(id) {
+  const { error } = await sb.from("invoices").delete().eq("id", id).eq("shop_id", currentShop.id);
+  if (error) throw error;
+}
+
+/********************
+ * App UI routing
+ ********************/
+function showPage(name) {
+  ["Calendar","Staff","Invoices","Reports"].forEach(p => {
+    document.getElementById("page"+p).classList.toggle("d-none", p !== name);
+  });
+  document.querySelectorAll(".bottom-nav .btn").forEach(btn => {
+    const active = btn.dataset.page === name;
+    btn.classList.toggle("btn-primary", active);
+    btn.classList.toggle("btn-outline-primary", !active);
+  });
+}
+document.querySelectorAll(".bottom-nav .btn").forEach(btn => {
+  btn.addEventListener("click", () => showPage(btn.dataset.page));
+});
+
+/********************
+ * Calendar
+ ********************/
+let calendar;
+const bookingModal = new bootstrap.Modal(document.getElementById("bookingModal"));
+const invoiceModal = new bootstrap.Modal(document.getElementById("invoiceModal"));
+const shopModal = new bootstrap.Modal(document.getElementById("shopModal"));
+
+function bookingToEvent(b) {
+  const st = staffById(b.staffId);
+  return {
+    id: b.id,
+    title: `${b.custName}｜${b.serviceName || ""}｜${st ? st.name : "员工已删"}｜${b.status}`,
+    start: b.startISO,
+    end: b.endISO
+  };
+}
+function refreshCalendar() {
+  if (!calendar) return;
+  calendar.removeAllEvents();
+  DB.bookings.forEach(b => calendar.addEvent(bookingToEvent(b)));
+}
+function fillStaffSelect(selectEl, selectedId=null) {
+  selectEl.innerHTML = "";
+  DB.staff.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = `${s.name}（${s.commission_type === "percent" ? s.commission_value+"%": fmtMoney(s.commission_value)+"元/单"}）`;
+    if (selectedId && selectedId === s.id) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+  if (!DB.staff.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "请先新增化妆师";
+    selectEl.appendChild(opt);
+  }
+}
+function fillServiceSelectByStaff(serviceSelectEl, staffId, selectedServiceId=null) {
+  serviceSelectEl.innerHTML = "";
+  const st = staffById(staffId);
+  const svcs = st?.services || [];
+  if (!svcs.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "该化妆师暂无项目（去化妆师页添加）";
+    serviceSelectEl.appendChild(opt);
+    return;
+  }
+  svcs.forEach(svc => {
+    const opt = document.createElement("option");
+    opt.value = svc.id;
+    opt.textContent = `${svc.name}（${fmtMoney(svc.price)}）`;
+    if (selectedServiceId && selectedServiceId === svc.id) opt.selected = true;
+    serviceSelectEl.appendChild(opt);
+  });
+}
+document.getElementById("staffSelect").addEventListener("change", () => {
+  const staffId = document.getElementById("staffSelect").value;
+  fillServiceSelectByStaff(document.getElementById("serviceSelect"), staffId);
+});
+
+function openNewBooking(prefill={}) {
+  document.getElementById("bookingId").value = "";
+  document.getElementById("custName").value = prefill.custName || "";
+  document.getElementById("custPhone").value = prefill.custPhone || "";
+  document.getElementById("bookDate").value = prefill.date || new Date().toISOString().slice(0,10);
+  document.getElementById("startTime").value = prefill.startTime || "09:00";
+  document.getElementById("endTime").value = prefill.endTime || "11:00";
+
+  fillStaffSelect(document.getElementById("staffSelect"), prefill.staffId || (DB.staff[0]?.id ?? null));
+  const staffId = document.getElementById("staffSelect").value;
+  fillServiceSelectByStaff(document.getElementById("serviceSelect"), staffId, prefill.serviceId || null);
+
+  document.getElementById("bookingStatus").value = prefill.status || "已预约";
+  document.getElementById("bookingNote").value = prefill.note || "";
+
+  document.getElementById("btnDeleteBooking").classList.add("d-none");
+  document.getElementById("conflictAlert").classList.add("d-none");
+  bookingModal.show();
+}
+function openEditBooking(id) {
+  const b = bookingById(id);
+  if (!b) return;
+  document.getElementById("bookingId").value = b.id;
+  document.getElementById("custName").value = b.custName;
+  document.getElementById("custPhone").value = b.custPhone || "";
+  document.getElementById("bookDate").value = b.date;
+  document.getElementById("startTime").value = b.startTime;
+  document.getElementById("endTime").value = b.endTime;
+
+  fillStaffSelect(document.getElementById("staffSelect"), b.staffId);
+  fillServiceSelectByStaff(document.getElementById("serviceSelect"), b.staffId, b.serviceId || null);
+
+  document.getElementById("bookingStatus").value = b.status;
+  document.getElementById("bookingNote").value = b.note || "";
+
+  document.getElementById("btnDeleteBooking").classList.remove("d-none");
+  document.getElementById("conflictAlert").classList.add("d-none");
+  bookingModal.show();
+}
+function validateBooking(payload) {
+  const errs = [];
+  if (!payload.custName.trim()) errs.push("客户姓名必填");
+  if (!payload.staffId) errs.push("化妆师必选");
+  if (!payload.serviceId) errs.push("项目必选");
+  if (!payload.date || !payload.startTime || !payload.endTime) errs.push("日期/时间必填");
+  const a = dateToISO(payload.date, payload.startTime);
+  const b = dateToISO(payload.date, payload.endTime);
+  if (a >= b) errs.push("结束时间必须晚于开始时间");
+  const conflict = DB.bookings.some(x => {
+    if (payload.id && x.id === payload.id) return false;
+    if (x.staffId !== payload.staffId) return false;
+    if (x.status === "已取消") return false;
+    return overlap(a, b, x.startISO, x.endISO);
+  });
+  return { errs, conflict, startISO: a, endISO: b };
+}
+
+document.getElementById("btnSaveBooking").addEventListener("click", async () => {
+  try {
+    const id = document.getElementById("bookingId").value || null;
+    const payload = {
       id,
-      custName:document.getElementById("custName").value,
-      custPhone:document.getElementById("custPhone").value,
-      staffId:document.getElementById("staffSelect").value,
-      serviceId:document.getElementById("serviceSelect").value,
-      date:document.getElementById("bookDate").value,
-      startTime:document.getElementById("startTime").value,
-      endTime:document.getElementById("endTime").value,
-      status:document.getElementById("bookingStatus").value,
-      note:document.getElementById("bookingNote").value
+      custName: document.getElementById("custName").value,
+      custPhone: document.getElementById("custPhone").value,
+      staffId: document.getElementById("staffSelect").value,
+      serviceId: document.getElementById("serviceSelect").value,
+      date: document.getElementById("bookDate").value,
+      startTime: document.getElementById("startTime").value,
+      endTime: document.getElementById("endTime").value,
+      status: document.getElementById("bookingStatus").value,
+      note: document.getElementById("bookingNote").value
     };
-    const {errs,conflict,startISO,endISO}=validateBooking(payload);
-    const alertBox=document.getElementById("conflictAlert");
-    if(errs.length){ alertBox.textContent=errs.join("；"); alertBox.classList.remove("d-none"); return; }
-    if(conflict){ alertBox.textContent="预约冲突：该化妆师此时间段已有预约。"; alertBox.classList.remove("d-none"); return; }
+
+    const { errs, conflict, startISO, endISO } = validateBooking(payload);
+    const alertBox = document.getElementById("conflictAlert");
+
+    if (errs.length) { alertBox.textContent = errs.join("；"); alertBox.classList.remove("d-none"); return; }
+    if (conflict) { alertBox.textContent = "预约冲突：该化妆师在此时间段已有预约。"; alertBox.classList.remove("d-none"); return; }
     alertBox.classList.add("d-none");
 
-    const st=staffById(payload.staffId);
-    const svc=st?.services?.find(x=>x.id===payload.serviceId);
-    if(!svc) return alert("项目无效，请重新选择");
+    const st = staffById(payload.staffId);
+    const svc = st?.services?.find(x => x.id === payload.serviceId);
+    if (!svc) return alert("项目无效，请重新选择");
 
-    const record={
-      id: payload.id || uid("bk"),
+    const record = {
+      id: payload.id || uuid(),
       custName: payload.custName.trim(),
       custPhone: payload.custPhone.trim(),
       staffId: payload.staffId,
       serviceId: payload.serviceId,
       serviceName: svc.name,
-      servicePrice: Number(svc.price||0),
+      servicePrice: Number(svc.price || 0),
       date: payload.date,
       startTime: payload.startTime,
       endTime: payload.endTime,
-      startISO, endISO,
+      startISO,
+      endISO,
       status: payload.status,
-      note: payload.note.trim(),
-      createdAt: id ? bookingById(id).createdAt : new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      note: payload.note.trim()
     };
-    if(id) DB.bookings = DB.bookings.map(b=>b.id===id?record:b);
-    else DB.bookings.push(record);
 
-    saveDB(DB); refreshAll(); bookingModal.hide();
-    showToast(id?"预约已更新":"预约已新增");
-  });
+    await upsertBookingCloud(record);
+    await loadAll();
+    bookingModal.hide();
+    showToast(id ? "预约已更新" : "预约已新增");
+  } catch (e) {
+    console.error(e);
+    alert("保存失败：" + (e?.message || "未知错误"));
+  }
+});
 
-  document.getElementById("btnDeleteBooking").addEventListener("click",()=>{
-    const id=document.getElementById("bookingId").value;
-    if(!id) return;
-    if(!confirm("确定删除该预约？（账单不会自动删除）")) return;
-    DB.bookings=DB.bookings.filter(b=>b.id!==id);
-    saveDB(DB); refreshAll(); bookingModal.hide();
+document.getElementById("btnDeleteBooking").addEventListener("click", async () => {
+  const id = document.getElementById("bookingId").value;
+  if (!id) return;
+  if (!confirm("确定删除该预约？（账单不会自动删除）")) return;
+  try {
+    await deleteBookingCloud(id);
+    await loadAll();
+    bookingModal.hide();
     showToast("预约已删除");
-  });
-
-  function renderUpcoming(){
-    const now=new Date();
-    const today=now.toISOString().slice(0,10);
-    document.getElementById("todayHint").textContent=`今天：${today}`;
-
-    const list=DB.bookings
-      .filter(b=>b.status!=="已取消")
-      .sort((a,b)=>(a.startISO||"").localeCompare(b.startISO||""))
-      .filter(b=>new Date(b.endISO)>=new Date(now.getTime()-24*3600*1000))
-      .slice(0,10);
-
-    const box=document.getElementById("upcomingList");
-    box.innerHTML="";
-    if(!list.length){ box.innerHTML=`<div class="small-muted">暂无近期预约</div>`; return; }
-
-    list.forEach(b=>{
-      const st=staffById(b.staffId);
-      const div=document.createElement("div");
-      div.className="card shadow-sm";
-      div.innerHTML=`
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <div class="fw-semibold">${b.custName}</div>
-              <div class="small-muted">${b.date} ${b.startTime}-${b.endTime}｜${b.serviceName||""}｜${st?st.name:"员工已删"}</div>
-            </div>
-            <span class="pill ${b.status==="已完成"?"bg-success text-white":"bg-primary text-white"}">${b.status}</span>
-          </div>
-          <div class="d-flex gap-2 mt-3">
-            <button class="btn btn-outline-primary flex-grow-1" data-act="edit" data-id="${b.id}">编辑预约</button>
-            <button class="btn btn-outline-secondary flex-grow-1" data-act="inv" data-id="${b.id}">做账单</button>
-          </div>
-        </div>
-      `;
-      box.appendChild(div);
-    });
-
-    box.querySelectorAll("button").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        const act=btn.dataset.act, id=btn.dataset.id;
-        if(act==="edit") openEditBooking(id);
-        if(act==="inv") openNewInvoice(id);
-      });
-    });
+  } catch (e) {
+    console.error(e);
+    alert("删除失败：" + (e?.message || "未知错误"));
   }
+});
 
-  // Staff cards + service list
-  function renderStaff(){
-    document.getElementById("staffCount").textContent=`共 ${DB.staff.length} 位`;
-    const box=document.getElementById("staffCards");
-    box.innerHTML="";
-    if(!DB.staff.length){ box.innerHTML=`<div class="small-muted">暂无化妆师，请先新增。</div>`; return; }
+/********************
+ * Staff Page render + actions
+ ********************/
+function renderStaff() {
+  document.getElementById("staffCount").textContent = `共 ${DB.staff.length} 位`;
+  const box = document.getElementById("staffCards");
+  box.innerHTML = "";
 
-    DB.staff.forEach(s=>{
-      const rule = s.commissionType==="percent" ? `${s.commissionValue}%` : `${fmtMoney(s.commissionValue)} 元/单`;
-      const div=document.createElement("div");
-      div.className="card border-0 shadow-sm";
-      div.innerHTML=`
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <div class="fw-semibold">${s.name}</div>
-              <div class="small-muted">提成：<span class="mono">${rule}</span></div>
-              <div class="small-muted">项目数：<span class="mono">${(s.services||[]).length}</span></div>
-            </div>
-            <div class="d-flex gap-2">
-              <button class="btn btn-outline-primary btn-sm" data-act="edit" data-id="${s.id}">编辑</button>
-              <button class="btn btn-outline-danger btn-sm" data-act="del" data-id="${s.id}">删除</button>
-            </div>
-          </div>
-        </div>
-      `;
-      box.appendChild(div);
-    });
+  if (!DB.staff.length) { box.innerHTML = `<div class="small-muted">暂无化妆师，请先新增。</div>`; return; }
 
-    box.querySelectorAll("button").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        const act=btn.dataset.act, id=btn.dataset.id;
-        if(act==="edit") openEditStaff(id);
-        if(act==="del"){
-          if(!confirm("确定删除该化妆师？历史单据会显示“员工已删除”。")) return;
-          DB.staff=DB.staff.filter(x=>x.id!==id);
-          saveDB(DB); refreshAll(); showToast("已删除");
-        }
-      });
-    });
-  }
-  function openEditStaff(id){
-    const s=staffById(id); if(!s) return;
-    document.getElementById("staffId").value=s.id;
-    document.getElementById("staffName").value=s.name;
-    document.getElementById("commissionType").value=s.commissionType;
-    document.getElementById("commissionValue").value=s.commissionValue;
-    renderServiceListForCurrentStaff();
-  }
-  function currentStaffId(){ return document.getElementById("staffId").value||""; }
-
-  function renderServiceListForCurrentStaff(){
-    const staffId=currentStaffId();
-    const listEl=document.getElementById("serviceList");
-    listEl.innerHTML="";
-    if(!staffId){ listEl.innerHTML=`<div class="small-muted">先保存/选择化妆师，再添加项目。</div>`; return; }
-    const st=staffById(staffId); if(!st) return;
-    const svcs=st.services||[];
-    if(!svcs.length){ listEl.innerHTML=`<div class="small-muted">暂无项目，使用上方输入框添加。</div>`; return; }
-
-    svcs.forEach(svc=>{
-      const div=document.createElement("div");
-      div.className="svc-item";
-      div.innerHTML=`
+  DB.staff.forEach(s => {
+    const rule = s.commission_type === "percent" ? `${s.commission_value}%` : `${fmtMoney(s.commission_value)} 元/单`;
+    const div = document.createElement("div");
+    div.className = "card border-0 shadow-sm";
+    div.innerHTML = `
+      <div class="card-body">
         <div class="d-flex justify-content-between align-items-start">
           <div>
-            <div class="fw-semibold">${svc.name}</div>
-            <div class="small-muted">金额：<span class="mono">${fmtMoney(svc.price)}</span></div>
+            <div class="fw-semibold">${s.name}</div>
+            <div class="small-muted">提成：<span class="mono">${rule}</span></div>
+            <div class="small-muted">项目数：<span class="mono">${(s.services||[]).length}</span></div>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary btn-sm" data-act="editSvc" data-id="${svc.id}">改</button>
-            <button class="btn btn-outline-danger btn-sm" data-act="delSvc" data-id="${svc.id}">删</button>
+            <button class="btn btn-outline-primary btn-sm" data-act="edit" data-id="${s.id}">编辑</button>
+            <button class="btn btn-outline-danger btn-sm" data-act="del" data-id="${s.id}">删除</button>
           </div>
         </div>
-      `;
-      listEl.appendChild(div);
-    });
+      </div>
+    `;
+    box.appendChild(div);
+  });
 
-    listEl.querySelectorAll("button").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        const act=btn.dataset.act, svcId=btn.dataset.id;
-        const st=staffById(currentStaffId()); if(!st) return;
-
-        if(act==="delSvc"){
-          if(!confirm("确定删除该项目？历史预约保留项目名称/价格快照。")) return;
-          st.services=(st.services||[]).filter(x=>x.id!==svcId);
-          DB.staff=DB.staff.map(x=>x.id===st.id?st:x);
-          saveDB(DB); refreshAll(); renderServiceListForCurrentStaff(); showToast("项目已删除");
+  box.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if (act === "edit") openEditStaff(id);
+      if (act === "del") {
+        if (!confirm("确定删除该化妆师？历史单据会显示“员工已删除”。")) return;
+        try {
+          await deleteStaffCloud(id);
+          await loadAll();
+          showToast("已删除");
+        } catch (e) {
+          console.error(e);
+          alert("删除失败：" + (e?.message || "未知错误"));
         }
-
-        if(act==="editSvc"){
-          const svc=(st.services||[]).find(x=>x.id===svcId); if(!svc) return;
-          const newName=prompt("项目名称：", svc.name); if(newName===null) return;
-          const newPriceStr=prompt("金额：", String(svc.price??0)); if(newPriceStr===null) return;
-          const newPrice=Number(newPriceStr);
-          if(!newName.trim()) return alert("名称不能为空");
-          if(Number.isNaN(newPrice)||newPrice<0) return alert("金额必须>=0");
-          svc.name=newName.trim(); svc.price=newPrice;
-          DB.staff=DB.staff.map(x=>x.id===st.id?st:x);
-          saveDB(DB); refreshAll(); renderServiceListForCurrentStaff(); showToast("已修改");
-        }
-      });
+      }
     });
-  }
-
-  document.getElementById("btnSaveStaff").addEventListener("click",()=>{
-    const id=document.getElementById("staffId").value||null;
-    const name=document.getElementById("staffName").value.trim();
-    const commissionType=document.getElementById("commissionType").value;
-    const commissionValue=Number(document.getElementById("commissionValue").value);
-    if(!name) return alert("姓名必填");
-    if(Number.isNaN(commissionValue)||commissionValue<0) return alert("提成数值必须>=0");
-
-    const old=id?staffById(id):null;
-    const record={
-      id: id||uid("st"),
-      name, commissionType, commissionValue,
-      services: Array.isArray(old?.services)?old.services:(old?.services||[]),
-      createdAt: id?old.createdAt:new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    if(id) DB.staff=DB.staff.map(s=>s.id===id?record:s);
-    else { DB.staff.push(record); document.getElementById("staffId").value=record.id; }
-    saveDB(DB); refreshAll(); renderServiceListForCurrentStaff(); showToast("已保存");
   });
+}
 
-  document.getElementById("btnClearStaff").addEventListener("click",()=>{
-    document.getElementById("staffId").value="";
-    document.getElementById("staffName").value="";
-    document.getElementById("commissionType").value="percent";
-    document.getElementById("commissionValue").value="";
-    document.getElementById("serviceList").innerHTML=`<div class="small-muted">先保存/选择化妆师，再添加项目。</div>`;
-  });
+function openEditStaff(id) {
+  const s = staffById(id);
+  if (!s) return;
+  document.getElementById("staffId").value = s.id;
+  document.getElementById("staffName").value = s.name;
+  document.getElementById("commissionType").value = s.commission_type;
+  document.getElementById("commissionValue").value = s.commission_value;
+  renderServiceListForCurrentStaff();
+}
 
-  document.getElementById("btnAddService").addEventListener("click",()=>{
-    const staffId=currentStaffId();
-    if(!staffId) return alert("请先保存/选择化妆师");
-    const st=staffById(staffId); if(!st) return;
-    const name=document.getElementById("svcName").value.trim();
-    const price=Number(document.getElementById("svcPrice").value);
-    if(!name) return alert("项目名称必填");
-    if(Number.isNaN(price)||price<0) return alert("金额必须>=0");
-    st.services=st.services||[];
-    st.services.push({id:uid("svc"),name,price});
-    DB.staff=DB.staff.map(x=>x.id===st.id?st:x);
-    saveDB(DB); refreshAll(); renderServiceListForCurrentStaff();
-    document.getElementById("svcName").value=""; document.getElementById("svcPrice").value="";
-    showToast("项目已添加");
-  });
-  document.getElementById("btnClearServiceInput").addEventListener("click",()=>{
-    document.getElementById("svcName").value="";
-    document.getElementById("svcPrice").value="";
-  });
+function currentStaffId() { return document.getElementById("staffId").value || ""; }
 
-  // Invoice
-  function renderInvoiceBookingDropdown(){
-    const sel=document.getElementById("invoiceBooking");
-    sel.innerHTML="";
-    const opt0=document.createElement("option");
-    opt0.value=""; opt0.textContent="（不绑定预约）"; sel.appendChild(opt0);
-    const list=[...DB.bookings].sort((a,b)=>(a.startISO||"").localeCompare(b.startISO||""));
-    list.forEach(b=>{
-      const st=staffById(b.staffId);
-      const opt=document.createElement("option");
-      opt.value=b.id;
-      opt.textContent=`${b.date} ${b.startTime}-${b.endTime}｜${b.custName}｜${b.serviceName||""}｜${st?st.name:"员工已删"}`;
-      sel.appendChild(opt);
-    });
-  }
+function renderServiceListForCurrentStaff() {
+  const staffId = currentStaffId();
+  const listEl = document.getElementById("serviceList");
+  listEl.innerHTML = "";
 
-  function invoiceBookingChanged(isNewDraft){
-    const bookingId=document.getElementById("invoiceBooking").value;
-    const info=document.getElementById("invoiceAutoInfo");
-    if(!bookingId){ info.textContent="未绑定预约：建议绑定预约自动带出信息。"; return; }
-    const b=bookingById(bookingId);
-    if(!b){ info.textContent="预约不存在（可能已删除）"; return; }
-    const st=staffById(b.staffId);
-    info.innerHTML=`已绑定：<span class="mono">${b.date} ${b.startTime}-${b.endTime}</span>｜客户 <span class="mono">${b.custName}</span>｜项目 <span class="mono">${b.serviceName||""}</span>｜金额 <span class="mono">${fmtMoney(b.servicePrice||0)}</span>｜员工 <span class="mono">${st?st.name:"员工已删"}</span>`;
-    if(isNewDraft){
-      const cur=document.getElementById("amountTotal").value;
-      if(cur===""||Number(cur)===0) document.getElementById("amountTotal").value=Number(b.servicePrice||0);
-    }
-  }
-  document.getElementById("invoiceBooking").addEventListener("change",()=>invoiceBookingChanged(true));
+  if (!staffId) { listEl.innerHTML = `<div class="small-muted">先保存/选择化妆师，再添加项目。</div>`; return; }
+  const st = staffById(staffId);
+  if (!st) return;
 
-  function openNewInvoice(prefillBookingId=""){
-    document.getElementById("invoiceId").value="";
-    document.getElementById("invoiceBooking").value=prefillBookingId||"";
-    document.getElementById("amountTotal").value="";
-    document.getElementById("amountPaid").value="";
-    document.getElementById("payMethod").value="微信";
-    document.getElementById("invoiceStatus").value="UNPAID";
-    document.getElementById("invoiceNote").value="";
-    document.getElementById("invoiceHistory").textContent="暂无";
-    invoiceBookingChanged(true);
-    invoiceModal.show();
-  }
-  function openEditInvoice(id){
-    const inv=invoiceById(id); if(!inv) return;
-    document.getElementById("invoiceId").value=inv.id;
-    document.getElementById("invoiceBooking").value=inv.bookingId||"";
-    document.getElementById("amountTotal").value=inv.amountTotal??0;
-    document.getElementById("amountPaid").value=inv.amountPaid??0;
-    document.getElementById("payMethod").value=inv.payMethod||"微信";
-    document.getElementById("invoiceStatus").value=inv.status||"UNPAID";
-    document.getElementById("invoiceNote").value=inv.note||"";
-    invoiceBookingChanged(false);
+  const svcs = st.services || [];
+  if (!svcs.length) { listEl.innerHTML = `<div class="small-muted">暂无项目，使用上方输入框添加。</div>`; return; }
 
-    const h=Array.isArray(inv.history)?inv.history:[];
-    document.getElementById("invoiceHistory").innerHTML =
-      h.length ? h.slice().reverse().slice(0,12).map(x =>
-        `<div>• ${fmtDateTime(x.at)}｜${x.action}｜应收 ${fmtMoney(x.amountTotal)}｜已收 ${fmtMoney(x.amountPaid)}｜${x.status}｜${x.payMethod}</div>`
-      ).join("") : "暂无";
-
-    invoiceModal.show();
-  }
-  document.getElementById("btnSaveInvoice").addEventListener("click",()=>{
-    const id=document.getElementById("invoiceId").value||null;
-    const bookingId=document.getElementById("invoiceBooking").value||"";
-    const amountTotal=Number(document.getElementById("amountTotal").value);
-    const amountPaid=Number(document.getElementById("amountPaid").value||0);
-    const payMethod=document.getElementById("payMethod").value;
-    const note=document.getElementById("invoiceNote").value.trim();
-    const statusManual=document.getElementById("invoiceStatus").value;
-
-    if(Number.isNaN(amountTotal)||amountTotal<0) return alert("应收金额必须>=0");
-    if(Number.isNaN(amountPaid)||amountPaid<0) return alert("已收金额必须>=0");
-    if(amountPaid>amountTotal+0.00001) return alert("已收不能大于应收");
-
-    let statusAuto="UNPAID";
-    if(amountPaid<=0.00001) statusAuto="UNPAID";
-    else if(amountPaid+0.00001<amountTotal) statusAuto="PARTIAL";
-    else statusAuto="PAID";
-    const finalStatus = (statusManual==="VOID") ? "VOID" : statusAuto;
-
-    const old=id?invoiceById(id):null;
-    const history=old?.history?[...old.history]:[];
-    history.push({ at:new Date().toISOString(), action:id?"UPDATE":"CREATE", amountTotal, amountPaid, payMethod, status:finalStatus, note });
-
-    const record={
-      id: id||uid("inv"),
-      bookingId: bookingId||null,
-      amountTotal, amountPaid, payMethod, note,
-      status: finalStatus,
-      history,
-      createdAt: id?old.createdAt:new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    if(!record.bookingId) record.date=new Date().toISOString().slice(0,10);
-
-    if(id) DB.invoices=DB.invoices.map(i=>i.id===id?record:i);
-    else DB.invoices.push(record);
-
-    saveDB(DB); refreshAll(); invoiceModal.hide();
-    showToast(id?"账单已更新":"账单已新增");
-  });
-
-  function deleteInvoice(id){
-    if(!confirm("确定删除该账单？")) return;
-    DB.invoices=DB.invoices.filter(x=>x.id!==id);
-    saveDB(DB); refreshAll(); showToast("已删除");
-  }
-  function invoiceDerivedInfo(inv){
-    let date=inv.date||"", cust=inv.custName||"（未绑定预约）", service=inv.serviceName||"", staffName=inv.staffName||"", staff=null;
-    if(inv.bookingId){
-      const b=bookingById(inv.bookingId);
-      if(b){
-        date=b.date; cust=b.custName; service=b.serviceName||"";
-        staff=staffById(b.staffId); staffName=staff?staff.name:"（员工已删除）";
-      } else staffName="（预约已删除）";
-    }
-    return {date,cust,service,staffName,staff};
-  }
-
-  function renderInvoices(){
-    const q=(document.getElementById("invoiceSearch").value||"").trim().toLowerCase();
-    const box=document.getElementById("invoiceCards");
-    box.innerHTML="";
-
-    const list=[...DB.invoices].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
-    const filtered=list.filter(inv=>{
-      const {date,cust,service,staffName}=invoiceDerivedInfo(inv);
-      const blob=`${date} ${cust} ${service} ${staffName} ${inv.note||""} ${invoiceBadge(inv).text}`.toLowerCase();
-      return !q||blob.includes(q);
-    });
-
-    if(!filtered.length){ box.innerHTML=`<div class="small-muted">暂无账单</div>`; return; }
-
-    filtered.forEach(inv=>{
-      const {date,cust,service,staffName,staff}=invoiceDerivedInfo(inv);
-      const total=Number(inv.amountTotal||0), paid=Number(inv.amountPaid||0), unpaid=Math.max(0,total-paid);
-      const badge=invoiceBadge(inv);
-      const commission=(inv.status==="VOID")?0:calcCommission(staff,total);
-
-      const card=document.createElement("div");
-      card.className="card shadow-sm";
-      card.innerHTML=`
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <div class="fw-semibold">${cust}</div>
-              <div class="small-muted">${date||"-"}｜${service||""}｜${staffName||"-"}</div>
-            </div>
-            <span class="pill ${badge.cls}">${badge.text}</span>
-          </div>
-
-          <div class="row g-2 mt-2">
-            <div class="col-4"><div class="small-muted">应收</div><div class="mono">${fmtMoney(total)}</div></div>
-            <div class="col-4"><div class="small-muted">已收</div><div class="mono">${fmtMoney(paid)}</div></div>
-            <div class="col-4"><div class="small-muted">未收</div><div class="mono">${fmtMoney(unpaid)}</div></div>
-          </div>
-
-          <div class="small-muted mt-2">提成：<span class="mono">${fmtMoney(commission)}</span></div>
-          ${inv.note ? `<div class="small-muted mt-1">备注：${inv.note}</div>` : ""}
-
-          <div class="d-flex gap-2 mt-3">
-            <button class="btn btn-outline-primary flex-grow-1" data-act="edit" data-id="${inv.id}">编辑</button>
-            <button class="btn btn-outline-danger" data-act="del" data-id="${inv.id}">删除</button>
-          </div>
+  svcs.forEach(svc => {
+    const div = document.createElement("div");
+    div.className = "svc-item";
+    div.innerHTML = `
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-semibold">${svc.name}</div>
+          <div class="small-muted">金额：<span class="mono">${fmtMoney(svc.price)}</span></div>
         </div>
-      `;
-      box.appendChild(card);
-    });
-
-    box.querySelectorAll("button").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        const act=btn.dataset.act, id=btn.dataset.id;
-        if(act==="edit") openEditInvoice(id);
-        if(act==="del") deleteInvoice(id);
-      });
-    });
-  }
-  document.getElementById("invoiceSearch").addEventListener("input", renderInvoices);
-
-  // Report
-  function runReport(){
-    const start=document.getElementById("repStart").value||"0000-01-01";
-    const end=document.getElementById("repEnd").value||"9999-12-31";
-
-    const filtered=DB.invoices.filter(inv=>{
-      if(inv.status==="VOID") return false;
-      let d=inv.date||"";
-      if(inv.bookingId){
-        const b=bookingById(inv.bookingId);
-        d=b?b.date:d;
-      }
-      return d>=start && d<=end;
-    });
-
-    let total=0, paid=0;
-    const staffAgg=new Map();
-    const openList=[];
-
-    filtered.forEach(inv=>{
-      const amt=Number(inv.amountTotal||0), pd=Number(inv.amountPaid||0);
-      total+=amt; paid+=pd;
-
-      let staff=null, staffId="unknown", staffName="未识别";
-      if(inv.bookingId){
-        const b=bookingById(inv.bookingId);
-        if(b){
-          staff=staffById(b.staffId);
-          staffId=b.staffId||"unknown";
-          staffName=staff?staff.name:"（员工已删除）";
-        }
-      }
-      const commission=calcCommission(staff,amt);
-
-      if(!staffAgg.has(staffId)) staffAgg.set(staffId,{name:staffName,count:0,total:0,commission:0});
-      const rec=staffAgg.get(staffId);
-      rec.count+=1; rec.total+=amt; rec.commission+=commission;
-
-      const unpaid=Math.max(0,amt-pd);
-      if(unpaid>0.00001){
-        let d=inv.date||"", cust="（未绑定预约）", svc="";
-        if(inv.bookingId){
-          const b=bookingById(inv.bookingId);
-          if(b){ d=b.date; cust=b.custName; svc=b.serviceName||""; }
-        }
-        openList.push({d,cust,svc,unpaid,id:inv.id});
-      }
-    });
-
-    document.getElementById("repTotal").textContent=fmtMoney(total);
-    document.getElementById("repPaid").textContent=fmtMoney(paid);
-    document.getElementById("repUnpaid").textContent=fmtMoney(Math.max(0,total-paid));
-
-    const staffBox=document.getElementById("repStaffCards");
-    staffBox.innerHTML="";
-    const staffRows=[...staffAgg.values()].sort((a,b)=>b.total-a.total);
-    if(!staffRows.length) staffBox.innerHTML=`<div class="small-muted">暂无数据</div>`;
-    else staffRows.forEach(r=>{
-      const div=document.createElement("div");
-      div.className="card shadow-sm";
-      div.innerHTML=`
-        <div class="card-body">
-          <div class="fw-semibold">${r.name}</div>
-          <div class="small-muted">单数：<span class="mono">${r.count}</span></div>
-          <div class="small-muted">应收：<span class="mono">${fmtMoney(r.total)}</span></div>
-          <div class="small-muted">提成：<span class="mono">${fmtMoney(r.commission)}</span></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-primary btn-sm" data-act="editSvc" data-id="${svc.id}">改</button>
+          <button class="btn btn-outline-danger btn-sm" data-act="delSvc" data-id="${svc.id}">删</button>
         </div>
-      `;
-      staffBox.appendChild(div);
+      </div>
+    `;
+    listEl.appendChild(div);
+  });
+
+  listEl.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const act = btn.dataset.act;
+      const svcId = btn.dataset.id;
+      const st = staffById(currentStaffId());
+      if (!st) return;
+
+      if (act === "delSvc") {
+        if (!confirm("确定删除该项目？历史预约保留项目名称/价格快照。")) return;
+        try {
+          await deleteServiceCloud(svcId);
+          await loadAll();
+          renderServiceListForCurrentStaff();
+          showToast("项目已删除");
+        } catch (e) {
+          console.error(e);
+          alert("删除失败：" + (e?.message || "未知错误"));
+        }
+      }
+
+      if (act === "editSvc") {
+        const svc = (st.services || []).find(x => x.id === svcId);
+        if (!svc) return;
+        const newName = prompt("项目名称：", svc.name);
+        if (newName === null) return;
+        const newPriceStr = prompt("金额：", String(svc.price ?? 0));
+        if (newPriceStr === null) return;
+        const newPrice = Number(newPriceStr);
+        if (!newName.trim()) return alert("名称不能为空");
+        if (Number.isNaN(newPrice) || newPrice < 0) return alert("金额必须>=0");
+        try {
+          await upsertServiceCloud(st.id, { id: svcId, name: newName.trim(), price: newPrice });
+          await loadAll();
+          renderServiceListForCurrentStaff();
+          showToast("已修改");
+        } catch (e) {
+          console.error(e);
+          alert("修改失败：" + (e?.message || "未知错误"));
+        }
+      }
     });
-
-    const openBox=document.getElementById("repOpenInvoices");
-    openBox.innerHTML="";
-    if(!openList.length) openBox.innerHTML=`<div class="small-muted">暂无未结清账单</div>`;
-    else {
-      openList.sort((a,b)=>a.d.localeCompare(b.d)).forEach(x=>{
-        const div=document.createElement("div");
-        div.className="card shadow-sm";
-        div.innerHTML=`
-          <div class="card-body">
-            <div class="d-flex justify-content-between">
-              <div class="fw-semibold">${x.cust}</div>
-              <div class="mono">未收：${fmtMoney(x.unpaid)}</div>
-            </div>
-            <div class="small-muted">${x.d} ${x.svc}</div>
-            <button class="btn btn-outline-primary btn-sm mt-2" data-id="${x.id}">去编辑账单</button>
-          </div>
-        `;
-        openBox.appendChild(div);
-      });
-      openBox.querySelectorAll("button").forEach(btn=>{
-        btn.addEventListener("click",()=>{ showPage("Invoices"); openEditInvoice(btn.dataset.id); });
-      });
-    }
-  }
-
-  // Backup / Reset
-  document.getElementById("btnExport").addEventListener("click",()=>{
-    const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url; a.download=`makeup_shop_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click(); URL.revokeObjectURL(url);
   });
-  document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
-  document.getElementById("importFile").addEventListener("change", async (e)=>{
-    const file=e.target.files?.[0]; if(!file) return;
-    const text=await file.text();
-    try{
-      const data=migrateDB(JSON.parse(text));
-      if(!data||!Array.isArray(data.staff)||!Array.isArray(data.bookings)||!Array.isArray(data.invoices)) return alert("备份格式不正确");
-      DB=data; saveDB(DB); refreshAll(); showToast("导入成功");
-    } catch { alert("无法解析 JSON"); }
-    finally { e.target.value=""; }
-  });
-  document.getElementById("btnReset").addEventListener("click",()=>{
-    if(!confirm("确定清空所有数据？建议先导出备份。")) return;
-    localStorage.removeItem(STORE_KEY);
-    DB=loadDB(); refreshAll(); showToast("已清空");
-  });
+}
 
-  // Buttons
-  document.getElementById("btnNewBooking").addEventListener("click",()=>openNewBooking());
-  document.getElementById("btnNewInvoiceFromCal").addEventListener("click",()=>openNewInvoice());
-  document.getElementById("btnNewInvoice").addEventListener("click",()=>openNewInvoice());
-  document.getElementById("btnRunReport").addEventListener("click",runReport);
+document.getElementById("btnSaveStaff").addEventListener("click", async () => {
+  try {
+    const id = document.getElementById("staffId").value || null;
+    const name = document.getElementById("staffName").value.trim();
+    const commissionType = document.getElementById("commissionType").value;
+    const commissionValue = Number(document.getElementById("commissionValue").value);
 
-  function refreshAll(){
-    renderStaff();
+    if (!name) return alert("姓名必填");
+    if (Number.isNaN(commissionValue) || commissionValue < 0) return alert("提成数值必须>=0");
+
+    const staffId = await upsertStaff({ id, name, commissionType, commissionValue });
+    document.getElementById("staffId").value = staffId;
+
+    await loadAll();
     renderServiceListForCurrentStaff();
-    renderInvoiceBookingDropdown();
-    renderInvoices();
-    refreshCalendar();
-    renderUpcoming();
-
-    const today=new Date().toISOString().slice(0,10);
-    if(!document.getElementById("repStart").value) document.getElementById("repStart").value=today.slice(0,7)+"-01";
-    if(!document.getElementById("repEnd").value) document.getElementById("repEnd").value=today;
+    showToast("已保存");
+  } catch (e) {
+    console.error(e);
+    alert("保存失败：" + (e?.message || "未知错误"));
   }
+});
 
-  document.addEventListener("DOMContentLoaded",()=>{
-    calendar = new FullCalendar.Calendar(document.getElementById("calendar"),{
-      initialView:"timeGridWeek",
-      height:"auto",
-      locale:"zh-cn",
-      headerToolbar:{ left:"prev,next today", center:"title", right:"" },
-      selectable:true,
-      select:(info)=>{
-        const date=info.startStr.slice(0,10);
-        openNewBooking({date,startTime:"09:00",endTime:"11:00"});
+document.getElementById("btnClearStaff").addEventListener("click", () => {
+  document.getElementById("staffId").value = "";
+  document.getElementById("staffName").value = "";
+  document.getElementById("commissionType").value = "percent";
+  document.getElementById("commissionValue").value = "";
+  document.getElementById("serviceList").innerHTML = `<div class="small-muted">先保存/选择化妆师，再添加项目。</div>`;
+});
+
+document.getElementById("btnAddService").addEventListener("click", async () => {
+  const staffId = currentStaffId();
+  if (!staffId) return alert("请先保存/选择化妆师");
+  const name = document.getElementById("svcName").value.trim();
+  const price = Number(document.getElementById("svcPrice").value);
+  if (!name) return alert("项目名称必填");
+  if (Number.isNaN(price) || price < 0) return alert("金额必须>=0");
+  try {
+    await upsertServiceCloud(staffId, { name, price });
+    await loadAll();
+    renderServiceListForCurrentStaff();
+    document.getElementById("svcName").value = "";
+    document.getElementById("svcPrice").value = "";
+    showToast("项目已添加");
+  } catch (e) {
+    console.error(e);
+    alert("添加失败：" + (e?.message || "未知错误"));
+  }
+});
+document.getElementById("btnClearServiceInput").addEventListener("click", () => {
+  document.getElementById("svcName").value = "";
+  document.getElementById("svcPrice").value = "";
+});
+
+/********************
+ * Invoice UI
+ ********************/
+function renderInvoiceBookingDropdown() {
+  const sel = document.getElementById("invoiceBooking");
+  sel.innerHTML = "";
+  const opt0 = document.createElement("option");
+  opt0.value = "";
+  opt0.textContent = "（不绑定预约）";
+  sel.appendChild(opt0);
+
+  const list = [...DB.bookings].sort((a,b) => (a.startISO||"").localeCompare(b.startISO||""));
+  list.forEach(b => {
+    const st = staffById(b.staffId);
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.textContent = `${b.date} ${b.startTime}-${b.endTime}｜${b.custName}｜${b.serviceName||""}｜${st?st.name:"员工已删"}`;
+    sel.appendChild(opt);
+  });
+}
+function setInvoiceAutoInfo(bookingId, isNewDraft) {
+  const info = document.getElementById("invoiceAutoInfo");
+  if (!bookingId) { info.textContent = "未绑定预约：建议绑定预约自动带出项目金额。"; return; }
+  const b = bookingById(bookingId);
+  if (!b) { info.textContent = "预约不存在（可能已删除）"; return; }
+  const st = staffById(b.staffId);
+  info.innerHTML = `已绑定：<span class="mono">${b.date} ${b.startTime}-${b.endTime}</span>｜客户 <span class="mono">${b.custName}</span>｜项目 <span class="mono">${b.serviceName||""}</span>｜金额 <span class="mono">${fmtMoney(b.servicePrice||0)}</span>｜员工 <span class="mono">${st?st.name:"员工已删"}</span>`;
+  if (isNewDraft) {
+    const curTotal = document.getElementById("amountTotal").value;
+    if (curTotal === "" || Number(curTotal) === 0) document.getElementById("amountTotal").value = Number(b.servicePrice||0);
+    const curDeposit = document.getElementById("depositDue").value;
+    if (curDeposit === "" || Number(curDeposit) === 0) document.getElementById("depositDue").value = Math.min(DEFAULT_DEPOSIT, Number(b.servicePrice||0));
+  }
+}
+function recalcInvoicePreview() {
+  const total = Number(document.getElementById("amountTotal").value || 0);
+  let depositDue = Number(document.getElementById("depositDue").value || 0);
+  depositDue = Math.max(0, Math.min(depositDue, total));
+  document.getElementById("depositDue").value = depositDue;
+  const balanceDue = Math.max(0, total - depositDue);
+  document.getElementById("balanceDue").value = fmtMoney(balanceDue);
+
+  const paid = Number(document.getElementById("amountPaid").value || 0);
+  const stAuto = autoStatus(total, paid, depositDue);
+  document.getElementById("statusHint").innerHTML = `自动状态：<span class="mono">${statusLabel(stAuto)}</span>`;
+}
+document.getElementById("invoiceBooking").addEventListener("change", () => {
+  setInvoiceAutoInfo(document.getElementById("invoiceBooking").value, true);
+  recalcInvoicePreview();
+});
+["amountTotal","depositDue","amountPaid"].forEach(id => document.getElementById(id).addEventListener("input", recalcInvoicePreview));
+document.getElementById("btnQuickDeposit").addEventListener("click", () => {
+  const total = Number(document.getElementById("amountTotal").value || 0);
+  let depositDue = Number(document.getElementById("depositDue").value || 0);
+  depositDue = Math.max(0, Math.min(depositDue, total));
+  document.getElementById("amountPaid").value = depositDue;
+  recalcInvoicePreview();
+});
+document.getElementById("btnQuickPaidAll").addEventListener("click", () => {
+  const total = Number(document.getElementById("amountTotal").value || 0);
+  document.getElementById("amountPaid").value = total;
+  recalcInvoicePreview();
+});
+
+function openNewInvoice(prefillBookingId="") {
+  document.getElementById("invoiceId").value = "";
+  document.getElementById("invoiceBooking").value = prefillBookingId || "";
+  document.getElementById("amountTotal").value = "";
+  document.getElementById("depositDue").value = DEFAULT_DEPOSIT;
+  document.getElementById("amountPaid").value = "";
+  document.getElementById("payMethod").value = "微信";
+  document.getElementById("invoiceStatus").value = "AUTO";
+  document.getElementById("invoiceNote").value = "";
+  document.getElementById("invoiceHistory").textContent = "暂无";
+  setInvoiceAutoInfo(prefillBookingId || "", true);
+  recalcInvoicePreview();
+  invoiceModal.show();
+}
+function openEditInvoice(id) {
+  const inv = invoiceById(id);
+  if (!inv) return;
+  document.getElementById("invoiceId").value = inv.id;
+  document.getElementById("invoiceBooking").value = inv.bookingId || "";
+  document.getElementById("amountTotal").value = inv.amountTotal ?? 0;
+  document.getElementById("depositDue").value = inv.depositDue ?? DEFAULT_DEPOSIT;
+  document.getElementById("amountPaid").value = inv.amountPaid ?? 0;
+  document.getElementById("payMethod").value = inv.payMethod || "微信";
+  document.getElementById("invoiceStatus").value = inv.statusManual || "AUTO";
+  document.getElementById("invoiceNote").value = inv.note || "";
+
+  setInvoiceAutoInfo(inv.bookingId || "", false);
+  recalcInvoicePreview();
+
+  const h = Array.isArray(inv.history) ? inv.history : [];
+  document.getElementById("invoiceHistory").innerHTML =
+    h.length ? h.slice().reverse().slice(0,12).map(x =>
+      `<div>• ${fmtDateTime(x.at)}｜${x.action}｜应收 ${fmtMoney(x.amountTotal)}｜定金 ${fmtMoney(x.depositDue)}｜已收 ${fmtMoney(x.amountPaid)}｜${x.statusFinalLabel}｜${x.payMethod}</div>`
+    ).join("") : "暂无";
+
+  invoiceModal.show();
+}
+
+document.getElementById("btnSaveInvoice").addEventListener("click", async () => {
+  try {
+    const id = document.getElementById("invoiceId").value || null;
+    const bookingId = document.getElementById("invoiceBooking").value || "";
+    const amountTotal = Number(document.getElementById("amountTotal").value);
+    let depositDue = Number(document.getElementById("depositDue").value);
+    const amountPaid = Number(document.getElementById("amountPaid").value || 0);
+    const payMethod = document.getElementById("payMethod").value;
+    const note = document.getElementById("invoiceNote").value.trim();
+    const statusManual = document.getElementById("invoiceStatus").value; // AUTO or VOID
+
+    if (Number.isNaN(amountTotal) || amountTotal < 0) return alert("应收总额必须>=0");
+    if (Number.isNaN(depositDue) || depositDue < 0) return alert("定金必须>=0");
+    if (Number.isNaN(amountPaid) || amountPaid < 0) return alert("已收必须>=0");
+    if (amountPaid > amountTotal + 0.00001) return alert("已收不能大于应收总额");
+
+    depositDue = Math.max(0, Math.min(depositDue, amountTotal));
+    const stAuto = autoStatus(amountTotal, amountPaid, depositDue);
+    const statusFinal = (statusManual === "VOID") ? "VOID" : stAuto;
+
+    const old = id ? invoiceById(id) : null;
+    const history = old?.history ? [...old.history] : [];
+    history.push({
+      at: new Date().toISOString(),
+      action: id ? "UPDATE" : "CREATE",
+      amountTotal,
+      depositDue,
+      amountPaid,
+      payMethod,
+      statusManual,
+      statusFinal,
+      statusFinalLabel: statusLabel(statusFinal),
+      note
+    });
+
+    const record = {
+      id: id || uuid(),
+      bookingId: bookingId || null,
+      amountTotal,
+      depositDue,
+      amountPaid,
+      payMethod,
+      note,
+      statusManual,
+      statusFinal,
+      history
+    };
+
+    await upsertInvoiceCloud(record);
+    await loadAll();
+    invoiceModal.hide();
+    showToast(id ? "账单已更新" : "账单已新增");
+  } catch (e) {
+    console.error(e);
+    alert("保存失败：" + (e?.message || "未知错误"));
+  }
+});
+
+async function deleteInvoice(id) {
+  if (!confirm("确定删除该账单？")) return;
+  try {
+    await deleteInvoiceCloud(id);
+    await loadAll();
+    showToast("已删除");
+  } catch (e) {
+    console.error(e);
+    alert("删除失败：" + (e?.message || "未知错误"));
+  }
+}
+
+function invoiceDerivedInfo(inv) {
+  let date = inv.date || "";
+  let cust = inv.custName || "（未绑定预约）";
+  let service = inv.serviceName || "";
+  let staffName = inv.staffName || "";
+  let staff = null;
+
+  if (inv.bookingId) {
+    const b = bookingById(inv.bookingId);
+    if (b) {
+      date = b.date;
+      cust = b.custName;
+      service = b.serviceName || "";
+      staff = staffById(b.staffId);
+      staffName = staff ? staff.name : "（员工已删除）";
+    } else {
+      staffName = "（预约已删除）";
+    }
+  }
+  return { date, cust, service, staffName, staff };
+}
+
+function renderInvoices() {
+  const q = (document.getElementById("invoiceSearch").value || "").trim().toLowerCase();
+  const box = document.getElementById("invoiceCards");
+  box.innerHTML = "";
+
+  const list = [...DB.invoices].sort((a,b) => (b.created_at||"").localeCompare(a.created_at||""));
+
+  const filtered = list.filter(inv => {
+    const { date, cust, service, staffName } = invoiceDerivedInfo(inv);
+    const badgeText = invoiceBadge(inv).text;
+    const blob = `${date} ${cust} ${service} ${staffName} ${inv.note||""} ${badgeText}`.toLowerCase();
+    return !q || blob.includes(q);
+  });
+
+  if (!filtered.length) { box.innerHTML = `<div class="small-muted">暂无账单</div>`; return; }
+
+  filtered.forEach(inv => {
+    const { date, cust, service, staffName, staff } = invoiceDerivedInfo(inv);
+    const total = Number(inv.amountTotal || 0);
+    const deposit = Math.max(0, Math.min(Number(inv.depositDue ?? DEFAULT_DEPOSIT), total));
+    const paid = Number(inv.amountPaid || 0);
+
+    const depositPaid = Math.min(paid, deposit);
+    const balanceDue = Math.max(0, total - deposit);
+    const balancePaid = Math.max(0, paid - deposit);
+    const balanceUnpaid = Math.max(0, balanceDue - balancePaid);
+    const unpaidAll = Math.max(0, total - paid);
+
+    const badge = invoiceBadge(inv);
+    const commission = (inv.statusFinal === "VOID" || inv.status_final === "VOID") ? 0 : calcCommission(staff, total);
+
+    const card = document.createElement("div");
+    card.className = "card shadow-sm";
+    card.innerHTML = `
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold">${cust}</div>
+            <div class="small-muted">${date || "-"}｜${service || ""}｜${staffName || "-"}</div>
+          </div>
+          <span class="pill ${badge.cls}">${badge.text}</span>
+        </div>
+
+        <div class="row g-2 mt-2">
+          <div class="col-4">
+            <div class="small-muted">应收</div>
+            <div class="mono">${fmtMoney(total)}</div>
+          </div>
+          <div class="col-4">
+            <div class="small-muted">已收</div>
+            <div class="mono">${fmtMoney(paid)}</div>
+          </div>
+          <div class="col-4">
+            <div class="small-muted">未收</div>
+            <div class="mono">${fmtMoney(unpaidAll)}</div>
+          </div>
+        </div>
+
+        <div class="row g-2 mt-2">
+          <div class="col-4">
+            <div class="small-muted">定金(应/收)</div>
+            <div class="mono">${fmtMoney(deposit)} / ${fmtMoney(depositPaid)}</div>
+          </div>
+          <div class="col-4">
+            <div class="small-muted">尾款(应收)</div>
+            <div class="mono">${fmtMoney(balanceDue)}</div>
+          </div>
+          <div class="col-4">
+            <div class="small-muted">尾款(未收)</div>
+            <div class="mono">${fmtMoney(balanceUnpaid)}</div>
+          </div>
+        </div>
+
+        <div class="small-muted mt-2">提成：<span class="mono">${fmtMoney(commission)}</span></div>
+        ${inv.note ? `<div class="small-muted mt-1">备注：${inv.note}</div>` : ""}
+
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-outline-primary flex-grow-1" data-act="edit" data-id="${inv.id}">编辑</button>
+          <button class="btn btn-outline-danger" data-act="del" data-id="${inv.id}">删除</button>
+        </div>
+      </div>
+    `;
+    box.appendChild(card);
+  });
+
+  box.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if (act === "edit") openEditInvoice(id);
+      if (act === "del") deleteInvoice(id);
+    });
+  });
+}
+document.getElementById("invoiceSearch").addEventListener("input", renderInvoices);
+
+/********************
+ * Reports
+ ********************/
+function runReport() {
+  const start = document.getElementById("repStart").value || "0000-01-01";
+  const end = document.getElementById("repEnd").value || "9999-12-31";
+
+  const filtered = DB.invoices.filter(inv => {
+    const statusFinal = inv.statusFinal || inv.status_final;
+    if (statusFinal === "VOID") return false;
+    let d = inv.date || "";
+    const bookingId = inv.bookingId || inv.booking_id;
+    if (bookingId) {
+      const b = bookingById(bookingId);
+      d = b ? b.date : d;
+    }
+    return d >= start && d <= end;
+  });
+
+  let total = 0, paid = 0;
+  let depositPaidSum = 0;
+  let balanceUnpaidSum = 0;
+
+  const staffAgg = new Map();
+  const openList = [];
+
+  filtered.forEach(inv => {
+    const amt = Number(inv.amountTotal || inv.amount_total || 0);
+    const pd = Number(inv.amountPaid || inv.amount_paid || 0);
+    const deposit = Math.max(0, Math.min(Number(inv.depositDue ?? inv.deposit_due ?? DEFAULT_DEPOSIT), amt));
+
+    total += amt;
+    paid += pd;
+
+    const depPaid = Math.min(pd, deposit);
+    depositPaidSum += depPaid;
+
+    const balanceDue = Math.max(0, amt - deposit);
+    const balancePaid = Math.max(0, pd - deposit);
+    const balanceUnpaid = Math.max(0, balanceDue - balancePaid);
+    balanceUnpaidSum += balanceUnpaid;
+
+    let staff = null, staffId = "unknown", staffName = "未识别";
+    const bookingId = inv.bookingId || inv.booking_id;
+    if (bookingId) {
+      const b = bookingById(bookingId);
+      if (b) {
+        staff = staffById(b.staffId);
+        staffId = b.staffId || "unknown";
+        staffName = staff ? staff.name : "（员工已删除）";
+      }
+    }
+    const commission = calcCommission(staff, amt);
+
+    if (!staffAgg.has(staffId)) staffAgg.set(staffId, { name: staffName, count: 0, total: 0, commission: 0 });
+    const rec = staffAgg.get(staffId);
+    rec.count += 1;
+    rec.total += amt;
+    rec.commission += commission;
+
+    const unpaidAll = Math.max(0, amt - pd);
+    if (unpaidAll > 0.00001) {
+      let d = inv.date || "";
+      let cust = "（未绑定预约）";
+      let svc = "";
+      if (bookingId) {
+        const b = bookingById(bookingId);
+        if (b) { d = b.date; cust = b.custName; svc = b.serviceName || ""; }
+      }
+      openList.push({ d, cust, svc, unpaidAll, balanceUnpaid, id: inv.id });
+    }
+  });
+
+  document.getElementById("repTotal").textContent = fmtMoney(total);
+  document.getElementById("repPaid").textContent = fmtMoney(paid);
+  document.getElementById("repUnpaid").textContent = fmtMoney(Math.max(0, total - paid));
+  document.getElementById("repDepositPaid").textContent = fmtMoney(depositPaidSum);
+  document.getElementById("repBalanceUnpaid").textContent = fmtMoney(balanceUnpaidSum);
+
+  const staffBox = document.getElementById("repStaffCards");
+  staffBox.innerHTML = "";
+  const staffRows = [...staffAgg.values()].sort((a,b)=>b.total-a.total);
+  if (!staffRows.length) staffBox.innerHTML = `<div class="small-muted">暂无数据</div>`;
+  else staffRows.forEach(r => {
+    const div = document.createElement("div");
+    div.className = "card shadow-sm";
+    div.innerHTML = `
+      <div class="card-body">
+        <div class="fw-semibold">${r.name}</div>
+        <div class="small-muted">单数：<span class="mono">${r.count}</span></div>
+        <div class="small-muted">应收：<span class="mono">${fmtMoney(r.total)}</span></div>
+        <div class="small-muted">提成（按应收）：<span class="mono">${fmtMoney(r.commission)}</span></div>
+      </div>
+    `;
+    staffBox.appendChild(div);
+  });
+
+  const openBox = document.getElementById("repOpenInvoices");
+  openBox.innerHTML = "";
+  if (!openList.length) openBox.innerHTML = `<div class="small-muted">暂无未结清账单</div>`;
+  else {
+    openList.sort((a,b)=>a.d.localeCompare(b.d)).forEach(x => {
+      const div = document.createElement("div");
+      div.className = "card shadow-sm";
+      div.innerHTML = `
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div class="fw-semibold">${x.cust}</div>
+            <div class="mono">未收：${fmtMoney(x.unpaidAll)}</div>
+          </div>
+          <div class="small-muted">${x.d} ${x.svc}</div>
+          <div class="small-muted">未收尾款：<span class="mono">${fmtMoney(x.balanceUnpaid)}</span></div>
+          <button class="btn btn-outline-primary btn-sm mt-2" data-id="${x.id}">去编辑账单</button>
+        </div>
+      `;
+      openBox.appendChild(div);
+    });
+    openBox.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        showPage("Invoices");
+        openEditInvoice(btn.dataset.id);
+      });
+    });
+  }
+}
+
+/********************
+ * Upcoming list
+ ********************/
+function renderUpcoming() {
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  document.getElementById("todayHint").textContent = `今天：${today}`;
+
+  const list = DB.bookings
+    .filter(b => b.status !== "已取消")
+    .sort((a,b) => (a.startISO||"").localeCompare(b.startISO||""))
+    .filter(b => new Date(b.endISO) >= new Date(now.getTime() - 24*3600*1000))
+    .slice(0, 10);
+
+  const box = document.getElementById("upcomingList");
+  box.innerHTML = "";
+
+  if (!list.length) { box.innerHTML = `<div class="small-muted">暂无近期预约</div>`; return; }
+
+  list.forEach(b => {
+    const st = staffById(b.staffId);
+    const div = document.createElement("div");
+    div.className = "card shadow-sm";
+    div.innerHTML = `
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold">${b.custName}</div>
+            <div class="small-muted">${b.date} ${b.startTime}-${b.endTime}｜${b.serviceName||""}｜${st?st.name:"员工已删"}</div>
+          </div>
+          <span class="pill ${b.status==="已完成"?"bg-success text-white":"bg-primary text-white"}">${b.status}</span>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-outline-primary flex-grow-1" data-act="edit" data-id="${b.id}">编辑预约</button>
+          <button class="btn btn-outline-secondary flex-grow-1" data-act="inv" data-id="${b.id}">做账单</button>
+        </div>
+      </div>
+    `;
+    box.appendChild(div);
+  });
+
+  box.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if (act === "edit") openEditBooking(id);
+      if (act === "inv") openNewInvoice(id);
+    });
+  });
+}
+
+/********************
+ * Refresh all
+ ********************/
+function refreshAll() {
+  renderStaff();
+  renderServiceListForCurrentStaff();
+  renderInvoiceBookingDropdown();
+  renderInvoices();
+  refreshCalendar();
+  renderUpcoming();
+
+  fillStaffSelect(document.getElementById("staffSelect"), DB.staff[0]?.id ?? null);
+  fillServiceSelectByStaff(document.getElementById("serviceSelect"), document.getElementById("staffSelect").value);
+
+  const today = new Date().toISOString().slice(0,10);
+  if (!document.getElementById("repStart").value) document.getElementById("repStart").value = today.slice(0,7) + "-01";
+  if (!document.getElementById("repEnd").value) document.getElementById("repEnd").value = today;
+}
+
+/********************
+ * Owner Lock (Mode B)
+ ********************/
+const LOCK_KEY = "owner_lock_pin_v1";
+let __unlockGranted = false;
+let __pendingPage = null;
+function getSavedPin() { return localStorage.getItem(LOCK_KEY) || ""; }
+function setSavedPin(pin) { localStorage.setItem(LOCK_KEY, pin); }
+function clearSavedPin() { localStorage.removeItem(LOCK_KEY); }
+function isValidPin(pin) { return /^[0-9]{4,6}$/.test(pin); }
+
+function openLockModal({ mode, onSuccess, onCancel }) {
+  const modalEl = document.getElementById("lockModal");
+  const modal = new bootstrap.Modal(modalEl);
+  const tip = document.getElementById("lockTip");
+  const label = document.getElementById("lockLabel");
+  const input = document.getElementById("lockPin");
+  const err = document.getElementById("lockErr");
+
+  err.classList.add("d-none"); err.textContent = ""; input.value = "";
+
+  if (mode === "SET") { tip.textContent = "首次使用：请设置老板密码（4~6位数字）"; label.textContent = "设置密码（4~6位数字）"; }
+  else { tip.textContent = "进入账单/报表需要密码"; label.textContent = "输入密码（4~6位数字）"; }
+
+  const okBtn = document.getElementById("lockOk");
+  const cancelBtn = document.getElementById("lockCancel");
+  const resetBtn = document.getElementById("lockReset");
+
+  function cleanup() { okBtn.onclick = null; cancelBtn.onclick = null; resetBtn.onclick = null; }
+
+  okBtn.onclick = () => {
+    const pin = (input.value || "").trim();
+    if (!isValidPin(pin)) { err.textContent = "密码必须是 4~6 位数字"; err.classList.remove("d-none"); return; }
+
+    if (mode === "SET") {
+      setSavedPin(pin); __unlockGranted = true; modal.hide(); cleanup(); onSuccess?.(); return;
+    }
+
+    const saved = getSavedPin();
+    if (!saved) { modal.hide(); cleanup(); openLockModal({ mode: "SET", onSuccess, onCancel }); return; }
+    if (pin !== saved) { err.textContent = "密码错误，请重试"; err.classList.remove("d-none"); return; }
+
+    __unlockGranted = true; modal.hide(); cleanup(); onSuccess?.();
+  };
+
+  cancelBtn.onclick = () => { modal.hide(); cleanup(); onCancel?.(); };
+  resetBtn.onclick = () => {
+    if (!confirm("确定要重设密码吗？（将清除旧密码）")) return;
+    clearSavedPin(); __unlockGranted = false;
+    err.classList.add("d-none"); err.textContent = "";
+    tip.textContent = "已清除旧密码，请重新设置"; label.textContent = "设置密码（4~6位数字）";
+  };
+
+  modal.show();
+  setTimeout(() => input.focus(), 250);
+}
+
+function requireOwnerUnlock(targetPageName) {
+  if (__unlockGranted) return true;
+  const saved = getSavedPin();
+  const mode = saved ? "VERIFY" : "SET";
+  __pendingPage = targetPageName;
+
+  openLockModal({
+    mode,
+    onSuccess: () => {
+      if (__pendingPage) { window.__showPageOriginal?.(__pendingPage); __pendingPage = null; }
+    },
+    onCancel: () => { __pendingPage = null; window.__showPageOriginal?.("Calendar"); }
+  });
+  return false;
+}
+
+(function hookShowPage() {
+  if (typeof window.showPage !== "function") return;
+  window.__showPageOriginal = window.showPage;
+
+  window.showPage = function(name) {
+    if (name === "Invoices" || name === "Reports") {
+      const ok = requireOwnerUnlock(name);
+      if (!ok) return;
+    }
+    window.__showPageOriginal(name);
+  };
+})();
+
+/********************
+ * Buttons
+ ********************/
+document.getElementById("btnNewBooking").addEventListener("click", () => openNewBooking());
+document.getElementById("btnNewInvoiceFromCal").addEventListener("click", () => openNewInvoice());
+document.getElementById("btnNewInvoice").addEventListener("click", () => openNewInvoice());
+document.getElementById("btnRunReport").addEventListener("click", runReport);
+
+document.getElementById("btnSync").addEventListener("click", async () => {
+  try {
+    await loadAll();
+    showToast("已同步");
+  } catch (e) {
+    console.error(e);
+    alert("同步失败：" + (e?.message || "未知错误"));
+  }
+});
+
+document.getElementById("btnShopInfo").addEventListener("click", () => {
+  if (!currentShop) return;
+  document.getElementById("shopTitle").textContent = currentShop.name;
+  document.getElementById("shopCode").textContent = currentShop.join_code;
+  shopModal.show();
+});
+document.getElementById("btnCopyCode").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(currentShop?.join_code || "");
+    showToast("已复制店铺码");
+  } catch { alert("复制失败：请手动长按复制"); }
+});
+
+document.getElementById("btnLogout").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
+/********************
+ * Auth: sign in / up
+ ********************/
+document.getElementById("btnSignUp").addEventListener("click", async () => {
+  try {
+    gateMsg(true, "");
+    const email = document.getElementById("authEmail").value.trim();
+    const password = document.getElementById("authPwd").value;
+    if (!email || !password) return gateMsg(false, "邮箱和密码必填");
+    const { error } = await sb.auth.signUp({ email, password });
+    if (error) throw error;
+    gateMsg(true, "注册成功：请用同样账号登录。");
+  } catch (e) {
+    console.error(e);
+    gateMsg(false, "注册失败：" + (e?.message || "未知错误"));
+  }
+});
+document.getElementById("btnSignIn").addEventListener("click", async () => {
+  try {
+    gateMsg(true, "");
+    const email = document.getElementById("authEmail").value.trim();
+    const password = document.getElementById("authPwd").value;
+    if (!email || !password) return gateMsg(false, "邮箱和密码必填");
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    currentUser = data.user;
+    await afterLogin();
+  } catch (e) {
+    console.error(e);
+    gateMsg(false, "登录失败：" + (e?.message || "未知错误"));
+  }
+});
+
+/********************
+ * Shop create/join
+ ********************/
+document.getElementById("btnCreateShop").addEventListener("click", async () => {
+  try {
+    if (!currentUser) return gateMsg(false, "请先登录");
+    const name = document.getElementById("shopName").value || "我的店铺";
+    const shop = await createShopAsOwner(name);
+    currentShop = shop;
+    gateMsg(true, `创建成功！店铺码：${shop.join_code}（发给员工加入）`);
+    await enterApp();
+  } catch (e) {
+    console.error(e);
+    gateMsg(false, "创建失败：" + (e?.message || "未知错误"));
+  }
+});
+document.getElementById("btnJoinShop").addEventListener("click", async () => {
+  try {
+    if (!currentUser) return gateMsg(false, "请先登录");
+    const code = document.getElementById("joinCode").value;
+    const shop = await joinShopByCode(code);
+    currentShop = shop;
+    gateMsg(true, `加入成功：${shop.name}`);
+    await enterApp();
+  } catch (e) {
+    console.error(e);
+    gateMsg(false, "加入失败：" + (e?.message || "未知错误"));
+  }
+});
+
+async function afterLogin() {
+  // 登录后查找店铺
+  currentShop = await loadMyShop();
+  if (currentShop) {
+    gateMsg(true, `已登录，已进入店铺：${currentShop.name}`);
+    await enterApp();
+  } else {
+    gateMsg(true, "已登录：你还没有店铺。老板请创建店铺；员工请输入店铺码加入。");
+  }
+}
+
+async function enterApp() {
+  document.getElementById("gate").classList.add("d-none");
+  document.getElementById("app").classList.remove("d-none");
+  document.getElementById("bottomNav").classList.remove("d-none");
+
+  // init calendar once
+  if (!calendar) {
+    calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+      initialView: "timeGridWeek",
+      height: "auto",
+      locale: "zh-cn",
+      headerToolbar: { left: "prev,next today", center: "title", right: "" },
+      selectable: true,
+      select: (info) => {
+        const date = info.startStr.slice(0,10);
+        openNewBooking({ date, startTime: "09:00", endTime: "11:00" });
       },
-      eventClick:(info)=>openEditBooking(info.event.id)
+      eventClick: (info) => openEditBooking(info.event.id)
     });
     calendar.render();
+    document.getElementById("btnViewWeek").addEventListener("click", () => calendar.changeView("timeGridWeek"));
+    document.getElementById("btnViewDay").addEventListener("click", () => calendar.changeView("timeGridDay"));
+    document.getElementById("btnViewList").addEventListener("click", () => calendar.changeView("listWeek"));
+  }
 
-    document.getElementById("btnViewWeek").addEventListener("click",()=>calendar.changeView("timeGridWeek"));
-    document.getElementById("btnViewDay").addEventListener("click",()=>calendar.changeView("timeGridDay"));
-    document.getElementById("btnViewList").addEventListener("click",()=>calendar.changeView("listWeek"));
+  showPage("Calendar");
+  await loadAll();
+  showToast("已进入店铺");
 
-    fillStaffSelect(document.getElementById("staffSelect"), DB.staff[0]?.id ?? null);
-    fillServiceSelectByStaff(document.getElementById("serviceSelect"), document.getElementById("staffSelect").value);
+  // 轻量自动刷新：每 20 秒拉一次（多设备更“同步感”）
+  if (!window.__autoSyncTimer) {
+    window.__autoSyncTimer = setInterval(() => loadAll().catch(()=>{}), 20000);
+  }
+}
 
-    showPage("Calendar");
-    refreshAll();
-  });
+/********************
+ * Boot
+ ********************/
+(async function boot() {
+  const { data } = await sb.auth.getSession();
+  currentUser = data?.session?.user || null;
+  if (currentUser) await afterLogin();
+})();
 </script>
 </body>
 </html>
-
-
