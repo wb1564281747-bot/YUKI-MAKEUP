@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>化妆店预约 & 账单系统（云同步终版）</title>
+  <title>化妆店预约 & 账单系统（云同步·免登录）</title>
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -73,11 +73,10 @@
 <body>
 <nav class="navbar bg-white border-bottom sticky-top">
   <div class="container d-flex justify-content-between align-items-center">
-    <span class="navbar-brand mb-0 fw-semibold">💄 化妆店系统（云同步）</span>
+    <span class="navbar-brand mb-0 fw-semibold" id="appTitle">💄 化妆店系统（云同步·免登录）</span>
     <div class="d-flex gap-2 align-items-center">
       <button class="btn btn-outline-primary btn-sm" id="btnSync">同步刷新</button>
       <button class="btn btn-outline-secondary btn-sm" id="btnShopInfo">店铺</button>
-      <button class="btn btn-outline-secondary btn-sm" id="btnLogout">退出</button>
     </div>
   </div>
 </nav>
@@ -88,54 +87,8 @@
     <div class="small-muted">Safari 点【分享】→【添加到主屏幕】，以后像 App 一样全屏打开。</div>
   </div>
 
-  <!-- Auth / Shop Gate -->
-  <div id="gate" class="card shadow-sm mb-3">
-    <div class="card-body">
-      <div class="section-title">🔐 登录 / 加入店铺</div>
-      <div class="small-muted mb-2">多设备同步需要登录。老板创建店铺，员工用店铺码加入。</div>
-
-      <div class="row g-2">
-        <div class="col-12">
-          <label class="form-label required">邮箱</label>
-          <input class="form-control" id="authEmail" placeholder="例如：boss@example.com" />
-        </div>
-        <div class="col-12">
-          <label class="form-label required">密码</label>
-          <input class="form-control" id="authPwd" type="password" placeholder="设置一个密码（员工可各自注册）" />
-        </div>
-      </div>
-
-      <div class="d-flex gap-2 mt-3">
-        <button class="btn btn-primary flex-grow-1" id="btnSignIn">登录</button>
-        <button class="btn btn-outline-primary flex-grow-1" id="btnSignUp">注册</button>
-      </div>
-
-      <hr class="my-3"/>
-
-      <div class="row g-2">
-        <div class="col-12">
-          <label class="form-label">店铺名称（老板创建时用）</label>
-          <input class="form-control" id="shopName" placeholder="例如：YUKI 美妆" />
-        </div>
-        <div class="col-12">
-          <button class="btn btn-success w-100" id="btnCreateShop">我是老板：创建店铺</button>
-        </div>
-        <div class="col-12">
-          <label class="form-label">店铺码（员工加入）</label>
-          <input class="form-control mono" id="joinCode" placeholder="老板给你的 join_code" />
-        </div>
-        <div class="col-12">
-          <button class="btn btn-outline-success w-100" id="btnJoinShop">我是员工：输入店铺码加入</button>
-        </div>
-      </div>
-
-      <div class="alert alert-danger d-none mt-3" id="gateErr"></div>
-      <div class="alert alert-success d-none mt-3" id="gateOk"></div>
-    </div>
-  </div>
-
-  <!-- Pages -->
-  <div id="app" class="d-none">
+  <!-- App -->
+  <div id="app">
     <div id="pageCalendar" class="page">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="section-title">📅 预约</div>
@@ -245,7 +198,7 @@
         <div class="card-body">
           <input class="form-control" id="invoiceSearch" placeholder="搜索：客户/项目/员工/备注/状态" />
           <div class="small-muted mt-2">
-            云同步：每次保存即写入云端；其他设备点“同步刷新”即可看到最新数据。
+            云同步：保存即写入云端；其他设备点“同步刷新”或等待自动刷新即可看到最新数据。
           </div>
         </div>
       </div>
@@ -338,7 +291,7 @@
 </div>
 
 <!-- Bottom nav -->
-<div class="bottom-nav d-none" id="bottomNav">
+<div class="bottom-nav" id="bottomNav">
   <div class="container d-flex gap-2">
     <button class="btn btn-outline-primary" data-page="Calendar">预约</button>
     <button class="btn btn-outline-primary" data-page="Staff">化妆师</button>
@@ -533,7 +486,7 @@
         <hr class="my-3"/>
 
         <button class="btn btn-outline-danger w-100" id="lockReset">忘记密码/重设（需要确认）</button>
-        <div class="small-muted mt-2">密码只保存在本机（iPhone）浏览器里，不会上传。</div>
+        <div class="small-muted mt-2">密码只保存在本机浏览器里，不会上传。</div>
       </div>
     </div>
   </div>
@@ -550,10 +503,11 @@
       <div class="modal-body">
         <div class="small-muted">当前店铺</div>
         <div class="fw-semibold" id="shopTitle">-</div>
-        <div class="small-muted mt-2">店铺码（发给员工加入）</div>
+        <div class="small-muted mt-2">店铺码（展示用）</div>
         <div class="mono fs-5" id="shopCode">-</div>
-        <button class="btn btn-outline-primary w-100 mt-3" id="btnCopyCode">复制店铺码</button>
-        <div class="small-muted mt-2">员工加入：登录后输入此码 → 加入店铺。</div>
+        <div class="small-muted mt-2">当前 shop_id</div>
+        <div class="mono" id="shopIdText">-</div>
+        <button class="btn btn-outline-primary w-100 mt-3" id="btnCopyShopId">复制 shop_id</button>
       </div>
     </div>
   </div>
@@ -575,11 +529,15 @@
 
 <script>
 /********************
- * Supabase Config (你的)
+ * Config（你的）
  ********************/
 const SUPABASE_URL = "https://pqnrhzmhnajezkivpfks.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxbnJoem1obmFqZXpraXZwZmtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MzkzMjUsImV4cCI6MjA4NDAxNTMyNX0.NqnjHHhAxZIloSRdBPIApNZi4e_lVb57MUSXBxxmbWc";
+const SHOP_ID = "71798af3-a79e-4ffb-90d5-5026513233a1";
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DEFAULT_DEPOSIT = 500;
 
 /********************
  * iPhone install tip + SW
@@ -598,11 +556,9 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 /********************
  * In-Memory DB (cloud-backed)
  ********************/
-const DEFAULT_DEPOSIT = 500;
 let DB = { staff: [], bookings: [], invoices: [] };
 
-let currentUser = null;
-let currentShop = null; // {id, name, join_code, owner_id}
+let currentShop = { id: SHOP_ID, name: "我的店铺", join_code: "-" };
 
 const fmtMoney = (n) => (Number(n || 0)).toFixed(2);
 const fmtDateTime = (iso) => new Date(iso).toLocaleString("zh-CN", { hour12:false });
@@ -643,8 +599,8 @@ function statusLabel(st) {
   return st;
 }
 function invoiceBadge(inv) {
-  if (inv.status_final === "VOID") return { text: "作废", cls: "bg-secondary text-white" };
-  const st = inv.status_final || "UNPAID";
+  const st = inv.statusFinal || inv.status_final || "UNPAID";
+  if (st === "VOID") return { text: "作废", cls: "bg-secondary text-white" };
   if (st === "PAID") return { text: "已结清", cls: "bg-success text-white" };
   if (st === "PARTIAL") return { text: "部分收", cls: "bg-primary text-white" };
   if (st === "DEPOSIT") return { text: "已收定金", cls: "bg-info text-dark" };
@@ -652,107 +608,27 @@ function invoiceBadge(inv) {
 }
 
 /********************
- * Gate UI
+ * Cloud: shop meta
  ********************/
-function gateMsg(ok, msg) {
-  const e = document.getElementById("gateErr");
-  const s = document.getElementById("gateOk");
-  if (ok) {
-    e.classList.add("d-none");
-    s.classList.remove("d-none");
-    s.textContent = msg;
-  } else {
-    s.classList.add("d-none");
-    e.classList.remove("d-none");
-    e.textContent = msg;
-  }
-}
-
-/********************
- * Shop logic
- ********************/
-function genJoinCode() {
-  // 8位好读
-  const s = Math.random().toString(36).slice(2, 10).toUpperCase();
-  return s;
-}
-
-async function loadMyShop() {
-  if (!currentUser) return null;
-
-  // 1) 我是 owner 的店？
-  let { data: shopOwner, error: e1 } = await sb
-    .from("shops")
-    .select("*")
-    .eq("owner_id", currentUser.id)
-    .maybeSingle();
-
-  if (e1) console.warn(e1);
-
-  if (shopOwner) return shopOwner;
-
-  // 2) 我加入了哪些店？（取第一家）
-  let { data: mem, error: e2 } = await sb
-    .from("shop_members")
-    .select("shop_id, role, shops:shops(*)")
-    .eq("user_id", currentUser.id);
-
-  if (e2) console.warn(e2);
-
-  const first = mem?.[0]?.shops || null;
-  return first;
-}
-
-async function createShopAsOwner(name) {
-  if (!currentUser) throw new Error("请先登录");
-  if (!name.trim()) throw new Error("店铺名称不能为空");
-
-  // join_code 可能冲突，最多尝试几次
-  for (let i=0;i<5;i++) {
-    const join_code = genJoinCode();
-    const { data, error } = await sb
-      .from("shops")
-      .insert({ owner_id: currentUser.id, name: name.trim(), join_code })
-      .select("*")
-      .single();
-    if (!error) {
-      // owner 也写入 members
-      await sb.from("shop_members").insert({ shop_id: data.id, user_id: currentUser.id, role: "owner" });
-      return data;
+async function loadShopMeta() {
+  try {
+    const { data, error } = await sb.from("shops").select("*").eq("id", SHOP_ID).maybeSingle();
+    if (error) throw error;
+    if (data) {
+      currentShop = data;
+      document.getElementById("appTitle").textContent = `💄 ${data.name}（云同步·免登录）`;
+    } else {
+      currentShop = { id: SHOP_ID, name: "我的店铺", join_code: "-" };
     }
+  } catch {
+    currentShop = { id: SHOP_ID, name: "我的店铺", join_code: "-" };
   }
-  throw new Error("创建失败：请重试");
-}
-
-async function joinShopByCode(code) {
-  if (!currentUser) throw new Error("请先登录");
-  code = (code || "").trim().toUpperCase();
-  if (!code) throw new Error("店铺码不能为空");
-
-  const { data: shop, error } = await sb
-    .from("shops")
-    .select("*")
-    .eq("join_code", code)
-    .single();
-  if (error || !shop) throw new Error("店铺码无效");
-
-  // 插入成员（RLS 已允许 user_id = auth.uid()）
-  const { error: e2 } = await sb
-    .from("shop_members")
-    .insert({ shop_id: shop.id, user_id: currentUser.id, role: "staff" });
-  if (e2 && !String(e2.message||"").includes("duplicate")) {
-    // 已加入会 duplicate key，忽略
-    console.warn(e2);
-  }
-  return shop;
 }
 
 /********************
  * Cloud sync: load all
  ********************/
 async function loadAll() {
-  if (!currentShop) return;
-
   // staff
   const { data: staff, error: e1 } = await sb
     .from("staff")
@@ -841,17 +717,12 @@ async function upsertStaff(st) {
 
   const { error } = await sb.from("staff").upsert(payload);
   if (error) throw error;
-
-  // services：这里采用“简单策略”：只改动新增/删除/编辑时分别 upsert/delete（下面单独函数）
   return payload.id;
 }
-
 async function deleteStaffCloud(staffId) {
-  // services 级联会删（外键 on delete cascade）
   const { error } = await sb.from("staff").delete().eq("id", staffId).eq("shop_id", currentShop.id);
   if (error) throw error;
 }
-
 async function upsertServiceCloud(staffId, svc) {
   const payload = {
     id: svc.id || uuid(),
@@ -867,7 +738,6 @@ async function upsertServiceCloud(staffId, svc) {
   if (error) throw error;
   return payload.id;
 }
-
 async function deleteServiceCloud(serviceId) {
   const { error } = await sb.from("staff_services").delete().eq("id", serviceId).eq("shop_id", currentShop.id);
   if (error) throw error;
@@ -901,7 +771,6 @@ async function upsertBookingCloud(b) {
   if (error) throw error;
   return payload.id;
 }
-
 async function deleteBookingCloud(id) {
   const { error } = await sb.from("bookings").delete().eq("id", id).eq("shop_id", currentShop.id);
   if (error) throw error;
@@ -931,14 +800,13 @@ async function upsertInvoiceCloud(inv) {
   if (error) throw error;
   return payload.id;
 }
-
 async function deleteInvoiceCloud(id) {
   const { error } = await sb.from("invoices").delete().eq("id", id).eq("shop_id", currentShop.id);
   if (error) throw error;
 }
 
 /********************
- * App UI routing
+ * Routing
  ********************/
 function showPage(name) {
   ["Calendar","Staff","Invoices","Reports"].forEach(p => {
@@ -988,7 +856,7 @@ function fillStaffSelect(selectEl, selectedId=null) {
   if (!DB.staff.length) {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = "请先新增化妆师";
+    opt.textContent = "请先在【化妆师】里新增";
     selectEl.appendChild(opt);
   }
 }
@@ -1064,6 +932,7 @@ function validateBooking(payload) {
   const a = dateToISO(payload.date, payload.startTime);
   const b = dateToISO(payload.date, payload.endTime);
   if (a >= b) errs.push("结束时间必须晚于开始时间");
+
   const conflict = DB.bookings.some(x => {
     if (payload.id && x.id === payload.id) return false;
     if (x.staffId !== payload.staffId) return false;
@@ -1203,7 +1072,6 @@ function openEditStaff(id) {
   document.getElementById("commissionValue").value = s.commission_value;
   renderServiceListForCurrentStaff();
 }
-
 function currentStaffId() { return document.getElementById("staffId").value || ""; }
 
 function renderServiceListForCurrentStaff() {
@@ -1301,7 +1169,6 @@ document.getElementById("btnSaveStaff").addEventListener("click", async () => {
     alert("保存失败：" + (e?.message || "未知错误"));
   }
 });
-
 document.getElementById("btnClearStaff").addEventListener("click", () => {
   document.getElementById("staffId").value = "";
   document.getElementById("staffName").value = "";
@@ -1309,7 +1176,6 @@ document.getElementById("btnClearStaff").addEventListener("click", () => {
   document.getElementById("commissionValue").value = "";
   document.getElementById("serviceList").innerHTML = `<div class="small-muted">先保存/选择化妆师，再添加项目。</div>`;
 });
-
 document.getElementById("btnAddService").addEventListener("click", async () => {
   const staffId = currentStaffId();
   if (!staffId) return alert("请先保存/选择化妆师");
@@ -1557,7 +1423,8 @@ function renderInvoices() {
     const unpaidAll = Math.max(0, total - paid);
 
     const badge = invoiceBadge(inv);
-    const commission = (inv.statusFinal === "VOID" || inv.status_final === "VOID") ? 0 : calcCommission(staff, total);
+    const stFinal = inv.statusFinal || inv.status_final;
+    const commission = (stFinal === "VOID") ? 0 : calcCommission(staff, total);
 
     const card = document.createElement("div");
     card.className = "card shadow-sm";
@@ -1821,7 +1688,7 @@ function refreshAll() {
 }
 
 /********************
- * Owner Lock (Mode B)
+ * Owner Lock (Mode B) - for Invoices & Reports
  ********************/
 const LOCK_KEY = "owner_lock_pin_v1";
 let __unlockGranted = false;
@@ -1894,9 +1761,7 @@ function requireOwnerUnlock(targetPageName) {
 }
 
 (function hookShowPage() {
-  if (typeof window.showPage !== "function") return;
-  window.__showPageOriginal = window.showPage;
-
+  window.__showPageOriginal = showPage;
   window.showPage = function(name) {
     if (name === "Invoices" || name === "Reports") {
       const ok = requireOwnerUnlock(name);
@@ -1925,141 +1790,54 @@ document.getElementById("btnSync").addEventListener("click", async () => {
 });
 
 document.getElementById("btnShopInfo").addEventListener("click", () => {
-  if (!currentShop) return;
-  document.getElementById("shopTitle").textContent = currentShop.name;
-  document.getElementById("shopCode").textContent = currentShop.join_code;
+  document.getElementById("shopTitle").textContent = currentShop.name || "我的店铺";
+  document.getElementById("shopCode").textContent = currentShop.join_code || "-";
+  document.getElementById("shopIdText").textContent = currentShop.id;
   shopModal.show();
 });
-document.getElementById("btnCopyCode").addEventListener("click", async () => {
+document.getElementById("btnCopyShopId").addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(currentShop?.join_code || "");
-    showToast("已复制店铺码");
+    await navigator.clipboard.writeText(currentShop?.id || "");
+    showToast("已复制 shop_id");
   } catch { alert("复制失败：请手动长按复制"); }
 });
 
-document.getElementById("btnLogout").addEventListener("click", async () => {
-  await sb.auth.signOut();
-  location.reload();
-});
-
 /********************
- * Auth: sign in / up
+ * Calendar init
  ********************/
-document.getElementById("btnSignUp").addEventListener("click", async () => {
-  try {
-    gateMsg(true, "");
-    const email = document.getElementById("authEmail").value.trim();
-    const password = document.getElementById("authPwd").value;
-    if (!email || !password) return gateMsg(false, "邮箱和密码必填");
-    const { error } = await sb.auth.signUp({ email, password });
-    if (error) throw error;
-    gateMsg(true, "注册成功：请用同样账号登录。");
-  } catch (e) {
-    console.error(e);
-    gateMsg(false, "注册失败：" + (e?.message || "未知错误"));
-  }
-});
-document.getElementById("btnSignIn").addEventListener("click", async () => {
-  try {
-    gateMsg(true, "");
-    const email = document.getElementById("authEmail").value.trim();
-    const password = document.getElementById("authPwd").value;
-    if (!email || !password) return gateMsg(false, "邮箱和密码必填");
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    currentUser = data.user;
-    await afterLogin();
-  } catch (e) {
-    console.error(e);
-    gateMsg(false, "登录失败：" + (e?.message || "未知错误"));
-  }
-});
-
-/********************
- * Shop create/join
- ********************/
-document.getElementById("btnCreateShop").addEventListener("click", async () => {
-  try {
-    if (!currentUser) return gateMsg(false, "请先登录");
-    const name = document.getElementById("shopName").value || "我的店铺";
-    const shop = await createShopAsOwner(name);
-    currentShop = shop;
-    gateMsg(true, `创建成功！店铺码：${shop.join_code}（发给员工加入）`);
-    await enterApp();
-  } catch (e) {
-    console.error(e);
-    gateMsg(false, "创建失败：" + (e?.message || "未知错误"));
-  }
-});
-document.getElementById("btnJoinShop").addEventListener("click", async () => {
-  try {
-    if (!currentUser) return gateMsg(false, "请先登录");
-    const code = document.getElementById("joinCode").value;
-    const shop = await joinShopByCode(code);
-    currentShop = shop;
-    gateMsg(true, `加入成功：${shop.name}`);
-    await enterApp();
-  } catch (e) {
-    console.error(e);
-    gateMsg(false, "加入失败：" + (e?.message || "未知错误"));
-  }
-});
-
-async function afterLogin() {
-  // 登录后查找店铺
-  currentShop = await loadMyShop();
-  if (currentShop) {
-    gateMsg(true, `已登录，已进入店铺：${currentShop.name}`);
-    await enterApp();
-  } else {
-    gateMsg(true, "已登录：你还没有店铺。老板请创建店铺；员工请输入店铺码加入。");
-  }
-}
-
-async function enterApp() {
-  document.getElementById("gate").classList.add("d-none");
-  document.getElementById("app").classList.remove("d-none");
-  document.getElementById("bottomNav").classList.remove("d-none");
-
-  // init calendar once
-  if (!calendar) {
-    calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-      initialView: "timeGridWeek",
-      height: "auto",
-      locale: "zh-cn",
-      headerToolbar: { left: "prev,next today", center: "title", right: "" },
-      selectable: true,
-      select: (info) => {
-        const date = info.startStr.slice(0,10);
-        openNewBooking({ date, startTime: "09:00", endTime: "11:00" });
-      },
-      eventClick: (info) => openEditBooking(info.event.id)
-    });
-    calendar.render();
-    document.getElementById("btnViewWeek").addEventListener("click", () => calendar.changeView("timeGridWeek"));
-    document.getElementById("btnViewDay").addEventListener("click", () => calendar.changeView("timeGridDay"));
-    document.getElementById("btnViewList").addEventListener("click", () => calendar.changeView("listWeek"));
-  }
-
-  showPage("Calendar");
-  await loadAll();
-  showToast("已进入店铺");
-
-  // 轻量自动刷新：每 20 秒拉一次（多设备更“同步感”）
-  if (!window.__autoSyncTimer) {
-    window.__autoSyncTimer = setInterval(() => loadAll().catch(()=>{}), 20000);
-  }
+function initCalendarOnce() {
+  if (calendar) return;
+  calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+    initialView: "timeGridWeek",
+    height: "auto",
+    locale: "zh-cn",
+    headerToolbar: { left: "prev,next today", center: "title", right: "" },
+    selectable: true,
+    select: (info) => {
+      const date = info.startStr.slice(0,10);
+      openNewBooking({ date, startTime: "09:00", endTime: "11:00" });
+    },
+    eventClick: (info) => openEditBooking(info.event.id)
+  });
+  calendar.render();
+  document.getElementById("btnViewWeek").addEventListener("click", () => calendar.changeView("timeGridWeek"));
+  document.getElementById("btnViewDay").addEventListener("click", () => calendar.changeView("timeGridDay"));
+  document.getElementById("btnViewList").addEventListener("click", () => calendar.changeView("listWeek"));
 }
 
 /********************
  * Boot
  ********************/
 (async function boot() {
-  const { data } = await sb.auth.getSession();
-  currentUser = data?.session?.user || null;
-  if (currentUser) await afterLogin();
+  initCalendarOnce();
+  showPage("Calendar");
+  await loadShopMeta();
+  await loadAll();
+  showToast("已进入店铺（云同步）");
+
+  // 轻量自动刷新：每 20 秒拉一次
+  setInterval(() => loadAll().catch(()=>{}), 20000);
 })();
 </script>
 </body>
 </html>
-
