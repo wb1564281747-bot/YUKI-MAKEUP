@@ -73,7 +73,7 @@
 <body>
 <nav class="navbar bg-white border-bottom sticky-top">
   <div class="container d-flex justify-content-between align-items-center">
-    <span class="navbar-brand mb-0 fw-semibold" id="appTitle">💄 化妆店系统（云同步·免登录）</span>
+    <span class="navbar-brand mb-0 fw-semibold" id="appTitle">💄 YUKI MAKEUP </span>
     <div class="d-flex gap-2 align-items-center">
       <button class="btn btn-outline-primary btn-sm" id="btnSync">同步刷新</button>
       <button class="btn btn-outline-secondary btn-sm" id="btnShopInfo">店铺</button>
@@ -466,7 +466,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content" style="border-radius:16px;">
       <div class="modal-header">
-        <h5 class="modal-title">🔒 老板锁</h5>
+        <h5 class="modal-title">🔒 锁</h5>
       </div>
       <div class="modal-body">
         <div class="small-muted mb-2" id="lockTip">进入账单/报表需要密码</div>
@@ -1719,7 +1719,7 @@ function openLockModal({ mode, onSuccess, onCancel }) {
 
   err.classList.add("d-none"); err.textContent = ""; input.value = "";
 
-  if (mode === "SET") { tip.textContent = "首次使用：请设置老板密码（4~6位数字）"; label.textContent = "设置密码（4~6位数字）"; }
+  if (mode === "SET") { tip.textContent = "首次使用：请设置密码（4~6位数字）"; label.textContent = "设置密码（4~6位数字）"; }
   else { tip.textContent = "进入账单/报表需要密码"; label.textContent = "输入密码（4~6位数字）"; }
 
   const okBtn = document.getElementById("lockOk");
@@ -1955,4 +1955,5 @@ function initCalendarOnce() {
 </script>
 </body>
 </html>
+
 
