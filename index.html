@@ -486,7 +486,7 @@
         <hr class="my-3"/>
 
         <button class="btn btn-outline-danger w-100" id="lockReset">忘记密码/重设（需要确认）</button>
-        <div class="small-muted mt-2">密码只保存在本机浏览器里，不会上传。</div>
+        <div class="small-muted mt-2">密码多设备生效。</div>
       </div>
     </div>
   </div>
@@ -577,6 +577,15 @@ function showToast(msg) {
   document.getElementById("toastText").textContent = msg;
   new bootstrap.Toast(document.getElementById("toast"), { delay: 1600 }).show();
 }
+
+// ✅ 兜底：脚本出错时给出提示，避免“按钮没反应但看不出来哪里坏了”
+window.addEventListener("error", (e) => {
+  try {
+    console.error(e?.error || e);
+    alert("页面脚本出错：" + (e?.message || "未知错误") + "\n请打开浏览器控制台查看更多信息");
+  } catch {}
+});
+
 function uuid() { return (crypto?.randomUUID ? crypto.randomUUID() : ("id_"+Math.random().toString(16).slice(2)+"_"+Date.now())); }
 
 function staffById(id) { return DB.staff.find(s => s.id === id); }
@@ -1699,194 +1708,159 @@ function refreshAll() {
 }
 
 /********************
- * Owner Lock (Mode B) - for Invoices & Reports
- ********************/
-const LOCK_KEY = "owner_lock_pin_v1";
-let __unlockGranted = false;
-let __pendingPage = null;
-function getSavedPin() { return localStorage.getItem(LOCK_KEY) || ""; }
-function setSavedPin(pin) { localStorage.setItem(LOCK_KEY, pin); }
-function clearSavedPin() { localStorage.removeItem(LOCK_KEY); }
-function isValidPin(pin) { return /^[0-9]{4,6}$/.test(pin); }
-
-function openLockModal({ mode, onSuccess, onCancel }) {
-  const modalEl = document.getElementById("lockModal");
-  const modal = new bootstrap.Modal(modalEl);
-  const tip = document.getElementById("lockTip");
-  const label = document.getElementById("lockLabel");
-  const input = document.getElementById("lockPin");
-  const err = document.getElementById("lockErr");
-
-  err.classList.add("d-none"); err.textContent = ""; input.value = "";
-
-  if (mode === "SET") { tip.textContent = "首次使用：请设置密码（4~6位数字）"; label.textContent = "设置密码（4~6位数字）"; }
-  else { tip.textContent = "进入账单/报表需要密码"; label.textContent = "输入密码（4~6位数字）"; }
-
-  const okBtn = document.getElementById("lockOk");
-  const cancelBtn = document.getElementById("lockCancel");
-  const resetBtn = document.getElementById("lockReset");
-
-  function cleanup() { okBtn.onclick = null; cancelBtn.onclick = null; resetBtn.onclick = null; }
-
-  okBtn.onclick = () => {
-    const pin = (input.value || "").trim();
-    if (!isValidPin(pin)) { err.textContent = "密码必须是 4~6 位数字"; err.classList.remove("d-none"); return; }
-
-    if (mode === "SET") {
-      setSavedPin(pin); __unlockGranted = true; modal.hide(); cleanup(); onSuccess?.(); return;
-    }
-
-    const saved = getSavedPin();
-    if (!saved) { modal.hide(); cleanup(); openLockModal({ mode: "SET", onSuccess, onCancel }); return; }
-    if (pin !== saved) { err.textContent = "密码错误，请重试"; err.classList.remove("d-none"); return; }
-
-    __unlockGranted = true; modal.hide(); cleanup(); onSuccess?.();
-  };
-
-  cancelBtn.onclick = () => { modal.hide(); cleanup(); onCancel?.(); };
-  resetBtn.onclick = () => {
-    if (!confirm("确定要重设密码吗？（将清除旧密码）")) return;
-    clearSavedPin(); __unlockGranted = false;
-    err.classList.add("d-none"); err.textContent = "";
-    tip.textContent = "已清除旧密码，请重新设置"; label.textContent = "设置密码（4~6位数字）";
-  };
-
-  modal.show();
-  setTimeout(() => input.focus(), 250);
-}
-
-/********************
 
 * 页面锁 Page Lock 2.0（云端统一）
   ********************/
+
+// ✅ 先拿到 DOM 元素（否则会 ReferenceError 直接崩）
+const lockModalEl = document.getElementById("lockModal");
+const lockTipEl   = document.getElementById("lockTip");
+const lockLabelEl = document.getElementById("lockLabel");
+const lockPinEl   = document.getElementById("lockPin");
+const lockErrEl   = document.getElementById("lockErr");
+const lockOkBtn   = document.getElementById("lockOk");
+const lockCancelBtn = document.getElementById("lockCancel");
+const lockResetBtn  = document.getElementById("lockReset");
+
+// 页面锁运行态
+let __pendingPage = null;
+
+// 保存原来的 showPage（路由函数），后面我们会重写 showPage 来做拦截
+const __showPageOriginal = showPage;
 
 function setUnlocked() { __pageUnlocked = true; }
 function lockNow() { __pageUnlocked = false; }
 function isUnlocked() { return __pageUnlocked === true; }
 
 async function sha256(str) {
-const buf = new TextEncoder().encode(str);
-const hash = await crypto.subtle.digest("SHA-256", buf);
-return Array.from(new Uint8Array(hash))
-.map(b => b.toString(16).padStart(2, "0"))
-.join("");
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function getPageLockHash() {
-const { data } = await sb
-.from("shops")
-.select("page_lock_hash")
-.eq("id", currentShop.id)
-.maybeSingle();
-return data?.page_lock_hash || null;
+  const { data, error } = await sb
+    .from("shops")
+    .select("page_lock_hash")
+    .eq("id", currentShop.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.page_lock_hash || null;
 }
 
 async function setPageLock(pin) {
-const hash = await sha256(pin);
-await sb.from("shops")
-.update({ page_lock_hash: hash })
-.eq("id", currentShop.id);
+  const hash = await sha256(pin);
+  const { error } = await sb
+    .from("shops")
+    .update({ page_lock_hash: hash })
+    .eq("id", currentShop.id);
+  if (error) throw error;
 }
 
 async function requirePageLock(pageName) {
-__pendingPage = pageName;
+  __pendingPage = pageName;
 
-const hash = await getPageLockHash();
-const modal = new bootstrap.Modal(document.getElementById("lockModal"));
+  const modal = new bootstrap.Modal(lockModalEl);
+  const hash = await getPageLockHash();
 
-if (!hash) {
-lockTip.textContent = "首次使用，请设置页面锁密码";
-lockLabel.textContent = "设置密码（4~6 位数字）";
-} else {
-if (isUnlocked()) {
-showPage(pageName);
-return;
-}
-lockTip.textContent = "请输入页面锁密码";
-lockLabel.textContent = "密码";
-}
+  lockErrEl.classList.add("d-none");
+  lockErrEl.textContent = "";
+  lockPinEl.value = "";
 
-lockPin.value = "";
-lockErr.classList.add("d-none");
-modal.show();
-}
-
-/********************
-
-* 确认按钮
-  ********************/
-  lockOk.onclick = async () => {
-  const pin = lockPin.value.trim();
-  if (!/^\d{4,6}$/.test(pin)) {
-  lockErr.textContent = "请输入 4~6 位数字";
-  lockErr.classList.remove("d-none");
-  return;
+  if (!hash) {
+    lockTipEl.textContent = "首次使用，请设置页面锁密码";
+    lockLabelEl.textContent = "设置密码（4~6 位数字）";
+  } else {
+    if (isUnlocked()) {
+      __showPageOriginal(pageName);
+      return;
+    }
+    lockTipEl.textContent = "请输入页面锁密码";
+    lockLabelEl.textContent = "密码（4~6 位数字）";
   }
 
-const cloudHash = await getPageLockHash();
-const inputHash = await sha256(pin);
-
-// 首次设置
-if (!cloudHash) {
-await setPageLock(pin);
-setUnlocked();
-bootstrap.Modal.getInstance(lockModal).hide();
-showToast("页面锁已设置（多设备生效）");
-showPage(__pendingPage);
-return;
+  modal.show();
+  setTimeout(() => lockPinEl.focus(), 200);
 }
 
-// 校验
-if (inputHash !== cloudHash) {
-lockErr.textContent = "密码错误";
-lockErr.classList.remove("d-none");
-return;
-}
+// ✅ 确认按钮
+lockOkBtn.onclick = async () => {
+  try {
+    const pin = lockPinEl.value.trim();
+    if (!/^\d{4,6}$/.test(pin)) {
+      lockErrEl.textContent = "请输入 4~6 位数字";
+      lockErrEl.classList.remove("d-none");
+      return;
+    }
 
-setUnlocked();
-bootstrap.Modal.getInstance(lockModal).hide();
-showPage(__pendingPage);
+    const cloudHash = await getPageLockHash();
+    const inputHash = await sha256(pin);
+
+    // 首次设置
+    if (!cloudHash) {
+      await setPageLock(pin);
+      setUnlocked();
+      bootstrap.Modal.getInstance(lockModalEl)?.hide();
+      showToast("页面锁已设置（多设备生效）");
+      __showPageOriginal(__pendingPage);
+      return;
+    }
+
+    // 校验
+    if (inputHash !== cloudHash) {
+      lockErrEl.textContent = "密码错误";
+      lockErrEl.classList.remove("d-none");
+      return;
+    }
+
+    setUnlocked();
+    bootstrap.Modal.getInstance(lockModalEl)?.hide();
+    __showPageOriginal(__pendingPage);
+  } catch (e) {
+    console.error(e);
+    lockErrEl.textContent = "验证失败：" + (e?.message || "未知错误");
+    lockErrEl.classList.remove("d-none");
+  }
 };
 
-lockCancel.onclick = () => {
-bootstrap.Modal.getInstance(lockModal).hide();
+lockCancelBtn.onclick = () => {
+  bootstrap.Modal.getInstance(lockModalEl)?.hide();
 };
 
-/********************
-
-* 页面锁重置（管理员密码）
-  ********************/
-  lockReset.onclick = async () => {
+// ✅ 页面锁重置（管理员密码）
+lockResetBtn.onclick = async () => {
   const adminPin = prompt("请输入管理员密码以重置页面锁");
   if (adminPin !== ADMIN_RESET_PIN) {
-  alert("管理员密码错误，无法重置");
-  return;
-  }
-
-await sb.from("shops")
-.update({ page_lock_hash: null })
-.eq("id", currentShop.id);
-
-lockNow();                 // 重置运行态
-bootstrap.Modal.getInstance(lockModal).hide();
-showToast("页面锁已重置，请重新设置");
-};
-
-
-window.showPage = function(name) {
-  // 已解锁，直接放行
-  if (__pageUnlocked === true) {
-    window.__showPageOriginal(name);
+    alert("管理员密码错误，无法重置");
     return;
   }
 
-  // 仅在未解锁时拦截
+  const { error } = await sb
+    .from("shops")
+    .update({ page_lock_hash: null })
+    .eq("id", currentShop.id);
+
+  if (error) {
+    alert("重置失败：" + error.message);
+    return;
+  }
+
+  lockNow();
+  bootstrap.Modal.getInstance(lockModalEl)?.hide();
+  showToast("页面锁已重置，请重新设置");
+};
+
+// ✅ 重写 showPage：未解锁时拦截 Invoices / Reports
+showPage = function(name) {
+  if (__pageUnlocked === true) {
+    __showPageOriginal(name);
+    return;
+  }
   if (name === "Invoices" || name === "Reports") {
     requirePageLock(name);
     return;
   }
-
-  window.__showPageOriginal(name);
+  __showPageOriginal(name);
 };
 
 
