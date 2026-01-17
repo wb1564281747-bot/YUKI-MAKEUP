@@ -540,6 +540,17 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DEFAULT_DEPOSIT = 500;
 
 /********************
+
+* 页面锁 Page Lock 2.0 配置
+  ********************/
+
+// 管理员重置密码（仅用于重置页面锁）
+const ADMIN_RESET_PIN = "156428";
+
+// 页面锁运行态
+let __pageUnlocked = false;
+
+/********************
  * iPhone install tip + SW
  ********************/
 (function () {
@@ -1744,32 +1755,135 @@ function openLockModal({ mode, onSuccess, onCancel }) {
   setTimeout(() => input.focus(), 250);
 }
 
-function requireOwnerUnlock(targetPageName) {
-  if (__unlockGranted) return true;
-  const saved = getSavedPin();
-  const mode = saved ? "VERIFY" : "SET";
-  __pendingPage = targetPageName;
+/********************
 
-  openLockModal({
-    mode,
-    onSuccess: () => {
-      if (__pendingPage) { window.__showPageOriginal?.(__pendingPage); __pendingPage = null; }
-    },
-    onCancel: () => { __pendingPage = null; window.__showPageOriginal?.("Calendar"); }
-  });
-  return false;
+* 页面锁 Page Lock 2.0（云端统一）
+  ********************/
+
+function setUnlocked() { __pageUnlocked = true; }
+function lockNow() { __pageUnlocked = false; }
+function isUnlocked() { return __pageUnlocked === true; }
+
+async function sha256(str) {
+const buf = new TextEncoder().encode(str);
+const hash = await crypto.subtle.digest("SHA-256", buf);
+return Array.from(new Uint8Array(hash))
+.map(b => b.toString(16).padStart(2, "0"))
+.join("");
 }
+
+async function getPageLockHash() {
+const { data } = await sb
+.from("shops")
+.select("page_lock_hash")
+.eq("id", currentShop.id)
+.maybeSingle();
+return data?.page_lock_hash || null;
+}
+
+async function setPageLock(pin) {
+const hash = await sha256(pin);
+await sb.from("shops")
+.update({ page_lock_hash: hash })
+.eq("id", currentShop.id);
+}
+
+async function requirePageLock(pageName) {
+__pendingPage = pageName;
+
+const hash = await getPageLockHash();
+const modal = new bootstrap.Modal(document.getElementById("lockModal"));
+
+if (!hash) {
+lockTip.textContent = "首次使用，请设置页面锁密码";
+lockLabel.textContent = "设置密码（4~6 位数字）";
+} else {
+if (isUnlocked()) {
+showPage(pageName);
+return;
+}
+lockTip.textContent = "请输入页面锁密码";
+lockLabel.textContent = "密码";
+}
+
+lockPin.value = "";
+lockErr.classList.add("d-none");
+modal.show();
+}
+
+/********************
+
+* 确认按钮
+  ********************/
+  lockOk.onclick = async () => {
+  const pin = lockPin.value.trim();
+  if (!/^\d{4,6}$/.test(pin)) {
+  lockErr.textContent = "请输入 4~6 位数字";
+  lockErr.classList.remove("d-none");
+  return;
+  }
+
+const cloudHash = await getPageLockHash();
+const inputHash = await sha256(pin);
+
+// 首次设置
+if (!cloudHash) {
+await setPageLock(pin);
+setUnlocked();
+bootstrap.Modal.getInstance(lockModal).hide();
+showToast("页面锁已设置（多设备生效）");
+showPage(__pendingPage);
+return;
+}
+
+// 校验
+if (inputHash !== cloudHash) {
+lockErr.textContent = "密码错误";
+lockErr.classList.remove("d-none");
+return;
+}
+
+setUnlocked();
+bootstrap.Modal.getInstance(lockModal).hide();
+showPage(__pendingPage);
+};
+
+lockCancel.onclick = () => {
+bootstrap.Modal.getInstance(lockModal).hide();
+};
+
+/********************
+
+* 页面锁重置（管理员密码）
+  ********************/
+  lockReset.onclick = async () => {
+  const adminPin = prompt("请输入管理员密码以重置页面锁");
+  if (adminPin !== ADMIN_RESET_PIN) {
+  alert("管理员密码错误，无法重置");
+  return;
+  }
+
+await sb.from("shops")
+.update({ page_lock_hash: null })
+.eq("id", currentShop.id);
+
+lockNow();                 // 重置运行态
+bootstrap.Modal.getInstance(lockModal).hide();
+showToast("页面锁已重置，请重新设置");
+};
+
 
 (function hookShowPage() {
   window.__showPageOriginal = showPage;
   window.showPage = function(name) {
     if (name === "Invoices" || name === "Reports") {
-      const ok = requireOwnerUnlock(name);
-      if (!ok) return;
+      requirePageLock(name);
+      return;
     }
     window.__showPageOriginal(name);
   };
 })();
+
 
 /********************
  * Buttons
