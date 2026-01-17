@@ -1873,16 +1873,21 @@ showToast("页面锁已重置，请重新设置");
 };
 
 
-(function hookShowPage() {
-  window.__showPageOriginal = showPage;
-  window.showPage = function(name) {
-    if (name === "Invoices" || name === "Reports") {
-      requirePageLock(name);
-      return;
-    }
+window.showPage = function(name) {
+  // 已解锁，直接放行
+  if (__pageUnlocked === true) {
     window.__showPageOriginal(name);
-  };
-})();
+    return;
+  }
+
+  // 仅在未解锁时拦截
+  if (name === "Invoices" || name === "Reports") {
+    requirePageLock(name);
+    return;
+  }
+
+  window.__showPageOriginal(name);
+};
 
 
 /********************
@@ -1955,5 +1960,6 @@ function initCalendarOnce() {
 </script>
 </body>
 </html>
+
 
 
